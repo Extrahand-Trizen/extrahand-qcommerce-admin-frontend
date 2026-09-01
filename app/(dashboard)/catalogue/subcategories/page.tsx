@@ -6,33 +6,11 @@ import { EntityListPage } from '@/components/shared/entity-list-page';
 import { api, endpoints } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ImageIcon } from 'lucide-react';
-
-function SubcategoryNameCell({ row }: { row: Record<string, unknown> }) {
-  const name = String(row.name || '');
-  const imageUrl = row.imageUrl ? String(row.imageUrl) : '';
-
-  return (
-    <div className="flex items-center gap-3 min-w-[180px]">
-      {imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl}
-          alt=""
-          className="h-9 w-9 shrink-0 rounded-md border border-border object-cover bg-muted"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-      ) : (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted/50">
-          <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-        </div>
-      )}
-      <span className="font-medium truncate">{name}</span>
-    </div>
-  );
-}
+import {
+  CatalogueImageNameCell,
+  CataloguePlacementCell,
+  OrderCell,
+} from '@/components/shared/catalogue-table-cells';
 
 export default function SubcategoriesPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -47,55 +25,63 @@ export default function SubcategoriesPage() {
   return (
     <EntityListPage
       title="Subcategories"
+      description="Second-level groupings under each category."
       endpoint={
         categoryFilter !== 'all'
           ? `${endpoints.subcategories}?categoryId=${categoryFilter}`
           : endpoints.subcategories
       }
       queryKey={`subcategories-${categoryFilter}`}
+      searchPlaceholder="Search subcategories…"
       columns={[
-        { key: 'name', label: 'Subcategory', render: (r) => <SubcategoryNameCell row={r} /> },
-        {
-          key: 'categoryId',
-          label: 'Category',
-          render: (r) => {
-            const cat = r.categoryId as { name?: string } | string;
-            return typeof cat === 'object' ? cat?.name || '—' : String(cat);
-          },
-        },
-        { key: 'displayOrder', label: 'Order' },
+        { key: 'name', label: 'Subcategory', render: (r) => <CatalogueImageNameCell row={r} imageSize="sm" /> },
+        { key: 'categoryId', label: 'Category', render: (r) => <CataloguePlacementCell row={r} /> },
+        { key: 'displayOrder', label: 'Order', render: (r) => <OrderCell value={r.displayOrder} /> },
         { key: 'status', label: 'Status', render: (r) => <StatusBadge status={String(r.status)} /> },
       ]}
       fields={[
         {
+          section: 'Placement',
           name: 'categoryId',
-          label: 'Parent Category',
+          label: 'Parent category',
           type: 'category',
           required: true,
           placeholder: 'Select a category',
           hint: 'Which top-level category this belongs under.',
         },
         {
+          section: 'Basic details',
           name: 'name',
-          label: 'Subcategory Name',
+          label: 'Subcategory name',
           required: true,
           placeholder: 'e.g. Fruits & Vegetables',
           hint: 'Display name shown in the catalogue.',
         },
         {
+          section: 'Basic details',
           name: 'slug',
           label: 'Slug',
           placeholder: 'e.g. fruits-veg',
           hint: 'URL-friendly ID. Leave blank to auto-generate.',
         },
         {
+          section: 'Basic details',
+          name: 'description',
+          label: 'Description',
+          type: 'textarea',
+          placeholder: 'What products belong in this subcategory…',
+          hint: 'Optional internal note for admins.',
+        },
+        {
+          section: 'Display & order',
           name: 'displayOrder',
-          label: 'Display Order',
+          label: 'Display order',
           type: 'number',
-          placeholder: 'e.g. 1',
+          placeholder: '1',
           hint: 'Lower numbers appear first.',
         },
         {
+          section: 'Display & order',
           name: 'status',
           label: 'Status',
           type: 'status',
@@ -103,27 +89,22 @@ export default function SubcategoriesPage() {
           hint: 'Inactive subcategories are hidden from sellers.',
         },
         {
+          section: 'Image',
           name: 'imageUrl',
-          label: 'Image URL',
+          label: 'Subcategory image',
+          type: 'imageUrl',
           fullWidth: true,
           placeholder: 'https://example.com/subcategory.jpg',
-          hint: 'Optional thumbnail shown in the list.',
-        },
-        {
-          name: 'description',
-          label: 'Description',
-          type: 'textarea',
-          placeholder: 'What products belong in this subcategory…',
-          hint: 'Optional internal note for admins.',
+          hint: 'Optional thumbnail shown in lists.',
         },
       ]}
       extraFilters={
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full sm:w-52">
+          <SelectTrigger className="w-full bg-white sm:w-52">
             <SelectValue placeholder="Filter by category" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
+            <SelectItem value="all">All categories</SelectItem>
             {categories?.map((c) => (
               <SelectItem key={c._id} value={c._id}>
                 {c.name}

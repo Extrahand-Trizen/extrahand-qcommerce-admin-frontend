@@ -8,7 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { PageHeader } from '@/components/shared/page-header';
 import { SearchInput } from '@/components/shared/search-input';
 import { DataTableCard } from '@/components/shared/data-table-card';
@@ -16,6 +23,8 @@ import { TableEmptyRow, TableErrorRow, TableLoadingRows } from '@/components/sha
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import { FormField } from '@/components/shared/form-field';
+import { FormSection } from '@/components/shared/form-section';
+import { ImageUrlField } from '@/components/shared/image-url-field';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -23,23 +32,28 @@ import { cn } from '@/lib/utils';
 export interface Field {
   name: string;
   label: string;
-  type?: 'text' | 'textarea' | 'number' | 'select' | 'status' | 'category' | 'subcategory';
+  type?: 'text' | 'textarea' | 'number' | 'select' | 'status' | 'category' | 'subcategory' | 'imageUrl';
   options?: Array<{ value: string; label: string }>;
   required?: boolean;
   fullWidth?: boolean;
   dependsOn?: string;
   placeholder?: string;
   hint?: string;
+  /** Groups fields in the create/edit dialog */
+  section?: string;
 }
 
 interface EntityListPageProps {
   title: string;
+  description?: string;
   endpoint: string;
   queryKey: string;
   columns: Array<{ key: string; label: string; render?: (row: Record<string, unknown>) => React.ReactNode }>;
   fields: Field[];
   extraFilters?: React.ReactNode;
   nameField?: string;
+  searchPlaceholder?: string;
+  createLabel?: string;
 }
 
 function refId(value: unknown): string {
@@ -61,12 +75,15 @@ function buildUrl(endpoint: string, page: number, search: string) {
 
 export function EntityListPage({
   title,
+  description,
   endpoint,
   queryKey,
   columns,
   fields,
   extraFilters,
   nameField = 'name',
+  searchPlaceholder,
+  createLabel,
 }: EntityListPageProps) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -95,7 +112,7 @@ export function EntityListPage({
       selectedCategoryId
         ? (
             await api<{ items: Array<{ _id: string; name: string }> }>(
-              `${endpoints.subcategories}?categoryId=${selectedCategoryId}&limit=100&status=ACTIVE`
+              `${endpoints.subcategories}?categoryId=${selectedCategoryId}&limit=100&status=ACTIVE`,
             )
           ).data?.items || []
         : [],
@@ -106,13 +123,23 @@ export function EntityListPage({
     queryKey: [queryKey, search, page, endpoint],
     queryFn: async () => {
       const res = await api<{ items: Record<string, unknown>[]; total: number; totalPages: number }>(
-        buildUrl(endpoint, page, search)
+        buildUrl(endpoint, page, search),
       );
       if (!res.data) throw new Error('No data returned from server');
       return res.data;
     },
     retry: 1,
   });
+
+  const fieldSections = useMemo(() => {
+    const groups = new Map<string, Field[]>();
+    for (const field of fields) {
+      const section = field.section || 'Details';
+      if (!groups.has(section)) groups.set(section, []);
+      groups.get(section)!.push(field);
+    }
+    return Array.from(groups.entries());
+  }, [fields]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
@@ -202,17 +229,8 @@ export function EntityListPage({
     Attributes: 'Delete only if this attribute is not linked to any product type.',
   };
 
-  const shortFields = useMemo(
-    () => fields.filter((f) => f.type !== 'textarea' && !f.fullWidth),
-    [fields]
-  );
-  const wideFields = useMemo(
-    () => fields.filter((f) => f.type === 'textarea' || f.fullWidth),
-    [fields]
-  );
-
   function renderField(field: Field) {
-    const span = field.type === 'textarea' || field.fullWidth;
+    const span = field.type === 'textarea' || field.fullWidth || field.type === 'imageUrl';
 
     return (
       <FormField
@@ -228,6 +246,13 @@ export function EntityListPage({
             placeholder={field.placeholder}
             value={form[field.name] || ''}
             onChange={(e) => setField(field.name, e.target.value)}
+          />
+        ) : field.type === 'imageUrl' ? (
+          <ImageUrlField
+            value={form[field.name] || ''}
+            onChange={(v) => setField(field.name, v)}
+            placeholder={field.placeholder}
+            alt={form.name || field.label}
           />
         ) : field.type === 'category' ? (
           <Select value={form[field.name] || undefined} onValueChange={(v) => setField(field.name, v)}>
@@ -265,7 +290,7 @@ export function EntityListPage({
             </SelectContent>
           </Select>
         ) : field.type === 'select' || field.type === 'status' ? (
-          <Select value={form[field.name] || ''} onValueChange={(v) => setField(field.name, v)}>
+          <Select value={form[field.name] || undefined} onValueChange={(v) => setField(field.name, v)}>
             <SelectTrigger>
               <SelectValue placeholder={field.placeholder || 'Select an option'} />
             </SelectTrigger>
@@ -296,21 +321,37 @@ export function EntityListPage({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
+        description={description}
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
-            Add New
+            {createLabel || `Add ${singular}`}
           </Button>
         }
       />
 
       <DataTableCard
         toolbar={
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
-            <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} />
-            {extraFilters}
+          <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
+              <SearchInput
+                value={search}
+                onChange={(v) => {
+                  setSearch(v);
+                  setPage(1);
+                }}
+                placeholder={searchPlaceholder || `Search ${title.toLowerCase()}…`}
+                className="max-w-xs"
+              />
+              {extraFilters}
+            </div>
+            {data != null ? (
+              <p className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                {data.total} {data.total === 1 ? singular : title.toLowerCase()}
+              </p>
+            ) : null}
           </div>
         }
         footer={
@@ -323,9 +364,13 @@ export function EntityListPage({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               {columns.map((c) => (
-                <TableHead key={c.key}>{c.label}</TableHead>
+                <TableHead key={c.key} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {c.label}
+                </TableHead>
               ))}
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="w-[88px] text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -337,20 +382,29 @@ export function EntityListPage({
               <TableEmptyRow cols={colCount} />
             ) : (
               data.items.map((row) => (
-                <TableRow key={String(row._id)}>
+                <TableRow key={String(row._id)} className="group">
                   {columns.map((c) => (
-                    <TableCell key={c.key}>{c.render ? c.render(row) : String(row[c.key] ?? '')}</TableCell>
+                    <TableCell key={c.key} className="py-3">
+                      {c.render ? c.render(row) : String(row[c.key] ?? '—')}
+                    </TableCell>
                   ))}
-                  <TableCell>
-                    <div className="flex items-center gap-0.5">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(row)}>
+                  <TableCell className="py-3">
+                    <div className="flex items-center gap-0.5 opacity-80 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEdit(row)}
+                        aria-label="Edit"
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
                         onClick={() => setDeleting(row)}
+                        aria-label="Delete"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -364,26 +418,29 @@ export function EntityListPage({
       </DataTableCard>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editing ? 'Edit' : 'Add'} {singular}
             </DialogTitle>
             <DialogDescription>
-              Fill in the fields below. Required fields are marked with *.
+              {editing
+                ? `Update the ${singular} details below.`
+                : `Create a new ${singular}. Required fields are marked with *.`}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-6 pt-1">
-            <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
-              {shortFields.map(renderField)}
-              {wideFields.map(renderField)}
-            </div>
+            {fieldSections.map(([sectionName, sectionFields]) => (
+              <FormSection key={sectionName} title={sectionName}>
+                <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">{sectionFields.map(renderField)}</div>
+              </FormSection>
+            ))}
             <DialogFooter className="gap-2 border-t border-border pt-4 sm:gap-0">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? 'Saving...' : 'Save'}
+                {saveMutation.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create'}
               </Button>
             </DialogFooter>
           </form>

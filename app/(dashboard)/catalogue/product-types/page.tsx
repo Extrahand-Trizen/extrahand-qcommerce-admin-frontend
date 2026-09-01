@@ -6,6 +6,11 @@ import { EntityListPage } from '@/components/shared/entity-list-page';
 import { api, endpoints } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  CatalogueImageNameCell,
+  CataloguePlacementCell,
+  OrderCell,
+} from '@/components/shared/catalogue-table-cells';
 
 export default function ProductTypesPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -24,7 +29,7 @@ export default function ProductTypesPage() {
       categoryFilter !== 'all'
         ? (
             await api<{ items: Array<{ _id: string; name: string }> }>(
-              `${endpoints.subcategories}?categoryId=${categoryFilter}&limit=100`
+              `${endpoints.subcategories}?categoryId=${categoryFilter}&limit=100`,
             )
           ).data?.items || []
         : [],
@@ -40,31 +45,23 @@ export default function ProductTypesPage() {
   return (
     <EntityListPage
       title="Product Types"
+      description="Shared product templates that define which specification attributes apply."
       endpoint={endpoint}
       queryKey={`product-types-${categoryFilter}-${subcategoryFilter}`}
+      searchPlaceholder="Search product types…"
       columns={[
-        { key: 'name', label: 'Product Type' },
         {
-          key: 'categoryId',
-          label: 'Category',
-          render: (r) => {
-            const cat = r.categoryId as { name?: string };
-            return cat?.name || '—';
-          },
+          key: 'name',
+          label: 'Product type',
+          render: (r) => <CatalogueImageNameCell row={r} imageSize="sm" />,
         },
-        {
-          key: 'subcategoryId',
-          label: 'Subcategory',
-          render: (r) => {
-            const sub = r.subcategoryId as { name?: string };
-            return sub?.name || '—';
-          },
-        },
-        { key: 'displayOrder', label: 'Order' },
+        { key: 'categoryId', label: 'Placement', render: (r) => <CataloguePlacementCell row={r} /> },
+        { key: 'displayOrder', label: 'Order', render: (r) => <OrderCell value={r.displayOrder} /> },
         { key: 'status', label: 'Status', render: (r) => <StatusBadge status={String(r.status)} /> },
       ]}
       fields={[
         {
+          section: 'Placement',
           name: 'categoryId',
           label: 'Category',
           type: 'category',
@@ -73,6 +70,7 @@ export default function ProductTypesPage() {
           hint: 'Top-level catalogue category.',
         },
         {
+          section: 'Placement',
           name: 'subcategoryId',
           label: 'Subcategory',
           type: 'subcategory',
@@ -82,38 +80,43 @@ export default function ProductTypesPage() {
           hint: 'Choose category first, then pick the subcategory.',
         },
         {
+          section: 'Basic details',
           name: 'name',
-          label: 'Product Type Name',
+          label: 'Product type name',
           required: true,
-          placeholder: 'e.g. Fresh Fruits',
+          placeholder: 'e.g. Milk',
           hint: 'Shared type for many products (e.g. Apple, Banana → Fresh Fruits).',
         },
         {
+          section: 'Basic details',
           name: 'slug',
           label: 'Slug',
-          placeholder: 'e.g. fresh-fruits',
-          hint: 'URL-friendly ID. Leave blank to auto-generate.',
+          placeholder: 'e.g. milk',
+          hint: 'URL-friendly ID. Stored as subcategory-slug combined in the catalogue seed.',
         },
         {
-          name: 'displayOrder',
-          label: 'Display Order',
-          type: 'number',
-          placeholder: 'e.g. 1',
-          hint: 'Lower numbers appear first.',
-        },
-        {
-          name: 'status',
-          label: 'Status',
-          type: 'status',
-          placeholder: 'Select status',
-          hint: 'Inactive types cannot be used for new products.',
-        },
-        {
+          section: 'Basic details',
           name: 'description',
           label: 'Description',
           type: 'textarea',
           placeholder: 'What kinds of products use this type…',
           hint: 'Optional note for admins.',
+        },
+        {
+          section: 'Display & order',
+          name: 'displayOrder',
+          label: 'Display order',
+          type: 'number',
+          placeholder: '1',
+          hint: 'Lower numbers appear first.',
+        },
+        {
+          section: 'Display & order',
+          name: 'status',
+          label: 'Status',
+          type: 'status',
+          placeholder: 'Select status',
+          hint: 'Inactive types cannot be used for new products.',
         },
       ]}
       extraFilters={
@@ -125,11 +128,11 @@ export default function ProductTypesPage() {
               setSubcategoryFilter('all');
             }}
           >
-            <SelectTrigger className="w-full sm:w-44">
+            <SelectTrigger className="w-full bg-white sm:w-44">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="all">All categories</SelectItem>
               {categories?.map((c) => (
                 <SelectItem key={c._id} value={c._id}>
                   {c.name}
@@ -142,11 +145,11 @@ export default function ProductTypesPage() {
             onValueChange={setSubcategoryFilter}
             disabled={categoryFilter === 'all'}
           >
-            <SelectTrigger className="w-full sm:w-44">
+            <SelectTrigger className="w-full bg-white sm:w-44">
               <SelectValue placeholder="Subcategory" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Subcategories</SelectItem>
+              <SelectItem value="all">All subcategories</SelectItem>
               {filterSubs?.map((s) => (
                 <SelectItem key={s._id} value={s._id}>
                   {s.name}

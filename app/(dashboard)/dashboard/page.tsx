@@ -10,9 +10,6 @@ import {
   Users,
   UserCheck,
   Clock,
-  FolderTree,
-  Layers,
-  Tags,
   Package,
   ShoppingBag,
   FileText,
@@ -33,6 +30,15 @@ interface DashboardData {
     activeProducts: number;
     pendingProductSubmissions: number;
   };
+  categories: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    imageUrl?: string;
+    subcategoryCount: number;
+    productCount: number;
+    activeProductCount: number;
+  }>;
   activity: {
     recentSellers: Array<{ fullName: string; createdAt: string; status: string }>;
     recentApprovedSellers: Array<{ fullName: string; updatedAt: string }>;
@@ -42,31 +48,63 @@ interface DashboardData {
   };
 }
 
-type StatItem = {
+type ActionStat = {
   key: keyof DashboardData['stats'];
   label: string;
+  description: string;
   icon: LucideIcon;
   href: string;
-  accent: string;
+  tone: 'amber' | 'orange' | 'emerald' | 'cyan';
 };
 
-const catalogueStats: StatItem[] = [
-  { key: 'totalCategories', label: 'Categories', icon: FolderTree, href: '/catalogue/categories', accent: 'bg-violet-50 text-violet-700' },
-  { key: 'totalSubcategories', label: 'Subcategories', icon: Layers, href: '/catalogue/subcategories', accent: 'bg-indigo-50 text-indigo-700' },
-  { key: 'totalProductTypes', label: 'Product Types', icon: Tags, href: '/catalogue/product-types', accent: 'bg-pink-50 text-pink-700' },
+const actionStats: ActionStat[] = [
+  {
+    key: 'pendingSellerApprovals',
+    label: 'Pending seller approvals',
+    description: 'Shops waiting for review',
+    icon: Clock,
+    href: '/sellers/approvals',
+    tone: 'amber',
+  },
+  {
+    key: 'pendingProductSubmissions',
+    label: 'Pending product submissions',
+    description: 'Seller requests to review',
+    icon: FileText,
+    href: '/product-submissions',
+    tone: 'orange',
+  },
+  {
+    key: 'activeSellers',
+    label: 'Active sellers',
+    description: 'Approved and live on platform',
+    icon: UserCheck,
+    href: '/sellers/users',
+    tone: 'emerald',
+  },
+  {
+    key: 'activeProducts',
+    label: 'Active products',
+    description: 'Live in master catalogue',
+    icon: ShoppingBag,
+    href: '/products',
+    tone: 'cyan',
+  },
 ];
 
-const productStats: StatItem[] = [
-  { key: 'totalMasterProducts', label: 'Products', icon: Package, href: '/products', accent: 'bg-cyan-50 text-cyan-700' },
-  { key: 'activeProducts', label: 'Active Products', icon: ShoppingBag, href: '/products', accent: 'bg-emerald-50 text-emerald-700' },
-  { key: 'pendingProductSubmissions', label: 'Pending Submissions', icon: FileText, href: '/product-submissions', accent: 'bg-orange-50 text-orange-700' },
-];
+const toneStyles = {
+  amber: 'border-amber-200 bg-amber-50/70',
+  orange: 'border-orange-200 bg-orange-50/70',
+  emerald: 'border-emerald-200 bg-emerald-50/70',
+  cyan: 'border-cyan-200 bg-cyan-50/70',
+};
 
-const sellerStats: StatItem[] = [
-  { key: 'totalSellers', label: 'Total Sellers', icon: Users, href: '/sellers/users', accent: 'bg-blue-50 text-blue-700' },
-  { key: 'activeSellers', label: 'Active Sellers', icon: UserCheck, href: '/sellers/users', accent: 'bg-teal-50 text-teal-700' },
-  { key: 'pendingSellerApprovals', label: 'Pending Approvals', icon: Clock, href: '/sellers/approvals', accent: 'bg-amber-50 text-amber-700' },
-];
+const toneIconStyles = {
+  amber: 'bg-amber-100 text-amber-700',
+  orange: 'bg-orange-100 text-orange-700',
+  emerald: 'bg-emerald-100 text-emerald-700',
+  cyan: 'bg-cyan-100 text-cyan-700',
+};
 
 export default function DashboardPage() {
   const { data, isLoading } = useQuery({
@@ -78,103 +116,228 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="space-y-8">
-      <StatGroup title="Catalogue" stats={catalogueStats} data={data} isLoading={isLoading} />
-      <StatGroup title="Products" stats={productStats} data={data} isLoading={isLoading} />
-      <StatGroup title="Sellers" stats={sellerStats} data={data} isLoading={isLoading} />
-
+    <div className="flex min-h-[calc(100dvh-7rem)] flex-col gap-6">
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Recent activity</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ActivityCard
-            title="Pending seller approvals"
-            href="/sellers/approvals"
-            isLoading={isLoading}
-            items={data?.activity.pendingApprovals.map((s) => ({
-              primary: s.shopName,
-              secondary: s.fullName,
-              status: s.status,
-            }))}
-            empty="No pending approvals"
-          />
-          <ActivityCard
-            title="Recent product submissions"
-            href="/product-submissions"
-            isLoading={isLoading}
-            items={data?.activity.recentSubmissions.map((s) => ({
-              primary: s.submittedProductName,
-              secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
-              status: s.status,
-            }))}
-            empty="No recent submissions"
-          />
-          <ActivityCard
-            title="Newly registered sellers"
-            href="/sellers/users"
-            isLoading={isLoading}
-            items={data?.activity.recentSellers.map((s) => ({
-              primary: s.fullName,
-              secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
-              status: s.status,
-            }))}
-            empty="No recent sellers"
-          />
-          <ActivityCard
-            title="Recently created products"
-            href="/products"
-            isLoading={isLoading}
-            items={data?.activity.recentProducts.map((p) => ({
-              primary: p.name,
-              secondary: format(new Date(p.createdAt), 'MMM d, yyyy'),
-              status: p.status,
-            }))}
-            empty="No recent products"
-          />
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Catalogue overview on the left, seller metrics on the right, activity below.
+        </p>
+      </div>
+
+      <div className="grid shrink-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-stretch">
+        <div className="flex min-h-0 flex-col gap-3">
+          <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-white p-4 sm:p-5">
+            <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold">Catalogue categories</h2>
+                <p className="text-xs text-muted-foreground">
+                  {data?.stats.totalCategories ?? 9} top-level categories
+                </p>
+              </div>
+              <Link
+                href="/catalogue/categories"
+                className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline"
+              >
+                Manage
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <div className="min-h-0 flex-1">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                {isLoading
+                  ? Array.from({ length: 9 }).map((_, i) => (
+                      <Skeleton key={i} className="h-32 rounded-xl" />
+                    ))
+                  : data?.categories.map((category) => (
+                      <Link
+                        key={category.id}
+                        href={`/products?categoryId=${category.id}`}
+                        className="group rounded-xl border border-border p-3 transition-all hover:border-amber-200 hover:shadow-sm"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                            {category.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={category.imageUrl}
+                                alt={category.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-slate-200 text-sm font-semibold text-slate-500">
+                                {category.name.charAt(0)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
+                              {category.name}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {category.subcategoryCount} sub · {category.productCount} products
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-2 text-[11px] text-muted-foreground">
+                          <span>{category.activeProductCount} active</span>
+                          <span className="font-medium text-amber-700 opacity-0 transition-opacity group-hover:opacity-100">
+                            View products
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+              </div>
+            </div>
+          </section>
+
+          {!isLoading && data ? (
+            <CatalogueTags stats={data.stats} />
+          ) : (
+            <Skeleton className="h-6 w-full max-w-xl rounded-md" />
+          )}
         </div>
+
+        <aside className="flex flex-col gap-4">
+          <section className="rounded-xl border border-border bg-white p-4">
+            <h2 className="mb-3 text-base font-semibold">Needs attention</h2>
+            <div className="space-y-3">
+              {actionStats.map(({ key, label, description, icon: Icon, href, tone }) => (
+                <Link
+                  key={key}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg border px-3 py-3 transition-colors hover:brightness-[0.98]',
+                    toneStyles[tone],
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+                      toneIconStyles[tone],
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                  </div>
+                  {isLoading ? (
+                    <Skeleton className="h-7 w-8" />
+                  ) : (
+                    <p className="text-2xl font-semibold tabular-nums">{data?.stats[key] ?? 0}</p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Seller overview</h2>
+              <Link href="/sellers/users" className="text-xs font-medium text-amber-700 hover:underline">
+                View all
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <SummaryTile
+                label="Total sellers"
+                value={data?.stats.totalSellers}
+                isLoading={isLoading}
+                icon={Users}
+              />
+              <SummaryTile
+                label="Approved sellers"
+                value={data?.stats.activeSellers}
+                isLoading={isLoading}
+                icon={UserCheck}
+              />
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <div className="grid min-h-0 flex-1 gap-6 md:grid-cols-2">
+        <ActivityCard
+          title="Pending seller approvals"
+          href="/sellers/approvals"
+          isLoading={isLoading}
+          items={data?.activity.pendingApprovals.map((s) => ({
+            primary: s.shopName,
+            secondary: s.fullName,
+            status: s.status,
+          }))}
+          empty="No pending approvals"
+          className="flex min-h-[260px] flex-col"
+        />
+
+        <ActivityCard
+          title="Recent product submissions"
+          href="/product-submissions"
+          isLoading={isLoading}
+          items={data?.activity.recentSubmissions.map((s) => ({
+            primary: s.submittedProductName,
+            secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
+            status: s.status,
+          }))}
+          empty="No recent submissions"
+          className="flex min-h-[260px] flex-col"
+        />
       </div>
     </div>
   );
 }
 
-function StatGroup({
-  title,
+function CatalogueTags({
   stats,
-  data,
-  isLoading,
 }: {
-  title: string;
-  stats: StatItem[];
-  data?: DashboardData;
-  isLoading: boolean;
+  stats: DashboardData['stats'];
+}) {
+  const tags = [
+    { label: 'Subcategories', value: stats.totalSubcategories, href: '/catalogue/subcategories' },
+    { label: 'Product types', value: stats.totalProductTypes, href: '/catalogue/product-types' },
+    { label: 'All products', value: stats.totalMasterProducts, href: '/products' },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-sm text-muted-foreground">
+      {tags.map((tag, index) => (
+        <span key={tag.href} className="inline-flex items-center gap-2">
+          {index > 0 ? <span aria-hidden className="text-border">·</span> : null}
+          <Link href={tag.href} className="transition-colors hover:text-foreground">
+            <span className="font-semibold tabular-nums text-foreground">{tag.value}</span>{' '}
+            {tag.label}
+          </Link>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  isLoading,
+  icon: Icon,
+}: {
+  label: string;
+  value?: number;
+  isLoading?: boolean;
+  icon: LucideIcon;
 }) {
   return (
-    <section>
-      <h2 className="mb-3 text-sm font-semibold text-foreground">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {stats.map(({ key, label, icon: Icon, href, accent }) => (
-          <Link
-            key={key}
-            href={href}
-            className="group flex items-center gap-3 rounded-lg border border-border bg-white px-4 py-3.5 transition-colors hover:border-amber-200 hover:bg-amber-50/40"
-          >
-            <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', accent)}>
-              <Icon className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">{label}</p>
-              {isLoading ? (
-                <Skeleton className="mt-1 h-6 w-12" />
-              ) : (
-                <p className="text-xl font-semibold tracking-tight tabular-nums">
-                  {data?.stats[key] ?? 0}
-                </p>
-              )}
-            </div>
-            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-          </Link>
-        ))}
+    <div className="rounded-lg border border-border bg-slate-50 px-3 py-3">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-[11px] font-medium">{label}</span>
       </div>
-    </section>
+      {isLoading ? (
+        <Skeleton className="mt-2 h-7 w-10" />
+      ) : (
+        <p className="mt-1 text-xl font-semibold tabular-nums">{value ?? 0}</p>
+      )}
+    </div>
   );
 }
 
@@ -184,25 +347,27 @@ function ActivityCard({
   items,
   isLoading,
   empty,
+  className,
 }: {
   title: string;
   href: string;
   items?: Array<{ primary: string; secondary?: string; status?: string }>;
   isLoading?: boolean;
   empty: string;
+  className?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-white">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    <div className={cn('rounded-xl border border-border bg-white', className)}>
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold">{title}</h3>
         <Link href={href} className="text-xs font-medium text-amber-700 hover:underline">
           View all
         </Link>
       </div>
-      <div className="px-4 py-2">
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-2">
         {isLoading ? (
           <div className="space-y-3 py-2">
-            {Array.from({ length: 3 }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-9 w-full" />
             ))}
           </div>
@@ -210,7 +375,7 @@ function ActivityCard({
           <p className="py-6 text-center text-sm text-muted-foreground">{empty}</p>
         ) : (
           <ul className="divide-y divide-border">
-            {items.slice(0, 5).map((item, i) => (
+            {items.slice(0, 6).map((item, i) => (
               <li key={i} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{item.primary}</p>

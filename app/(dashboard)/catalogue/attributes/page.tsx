@@ -5,6 +5,7 @@ import { EntityListPage } from '@/components/shared/entity-list-page';
 import { endpoints } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AttributeNameCell, AttributeTypeBadge } from '@/components/shared/catalogue-table-cells';
 
 export default function AttributesPage() {
   const [statusFilter, setStatusFilter] = useState('all');
@@ -17,12 +18,13 @@ export default function AttributesPage() {
   return (
     <EntityListPage
       title="Attributes"
+      description="Reusable specification fields linked to product types (e.g. net quantity, flavour)."
       endpoint={endpoint}
       queryKey={`attributes-${statusFilter}`}
+      searchPlaceholder="Search attributes…"
       columns={[
-        { key: 'name', label: 'Attribute' },
-        { key: 'key', label: 'Key' },
-        { key: 'type', label: 'Type' },
+        { key: 'name', label: 'Attribute', render: (r) => <AttributeNameCell row={r} /> },
+        { key: 'type', label: 'Input type', render: (r) => <AttributeTypeBadge type={String(r.type || '')} /> },
         {
           key: 'isActive',
           label: 'Status',
@@ -31,34 +33,38 @@ export default function AttributesPage() {
       ]}
       fields={[
         {
+          section: 'Basic details',
           name: 'name',
-          label: 'Attribute Name',
+          label: 'Attribute name',
           required: true,
-          placeholder: 'e.g. Net Weight',
+          placeholder: 'e.g. Net Quantity',
           hint: 'Label shown when filling product specifications.',
         },
         {
+          section: 'Basic details',
           name: 'key',
           label: 'Key',
-          placeholder: 'e.g. weight',
+          placeholder: 'e.g. net_quantity',
           hint: 'Internal code (snake_case). Leave blank to auto-generate.',
         },
         {
+          section: 'Basic details',
           name: 'type',
-          label: 'Input Type',
+          label: 'Input type',
           type: 'select',
           required: true,
           placeholder: 'Select input type',
-          hint: 'How sellers/admins enter this value (text, number, dropdown, etc.).',
+          hint: 'How admins and sellers enter this value.',
           options: [
             { value: 'TEXT', label: 'Text' },
             { value: 'NUMBER', label: 'Number' },
             { value: 'DROPDOWN', label: 'Dropdown' },
-            { value: 'MULTI_SELECT', label: 'Multi Select' },
-            { value: 'BOOLEAN', label: 'Boolean (Yes/No)' },
+            { value: 'MULTI_SELECT', label: 'Multi select' },
+            { value: 'BOOLEAN', label: 'Boolean (Yes / No)' },
           ],
         },
         {
+          section: 'Basic details',
           name: 'description',
           label: 'Description',
           type: 'textarea',
@@ -68,11 +74,11 @@ export default function AttributesPage() {
       ]}
       extraFilters={
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40">
+          <SelectTrigger className="w-full bg-white sm:w-40">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>

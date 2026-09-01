@@ -1,10 +1,13 @@
 'use client';
 
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
-import { ImageIcon, Plus, Star, Trash2 } from 'lucide-react';
+import { ImageIcon, Plus, Star, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { apiUpload } from '@/lib/api';
+import { toast } from 'sonner';
 
 export type ProductImageDraft = {
   imageUrl: string;
@@ -14,9 +17,14 @@ export type ProductImageDraft = {
 interface ProductImagesFieldProps {
   images: ProductImageDraft[];
   onChange: (images: ProductImageDraft[]) => void;
+  /** When set, shows a file upload button that posts to this API path. */
+  uploadPath?: string;
 }
 
-export function ProductImagesField({ images, onChange }: ProductImagesFieldProps) {
+export function ProductImagesField({ images, onChange, uploadPath }: ProductImagesFieldProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadingRef = useRef(false);
+
   function updateUrl(index: number, url: string) {
     const next = images.map((img, i) => (i === index ? { ...img, imageUrl: url } : img));
     onChange(next);
@@ -34,28 +42,76 @@ export function ProductImagesField({ images, onChange }: ProductImagesFieldProps
     onChange(next);
   }
 
-  function addImage() {
+  function addImage(url = '') {
     onChange([
       ...images,
-      { imageUrl: '', isPrimary: images.length === 0 },
+      { imageUrl: url, isPrimary: images.length === 0 },
     ]);
+  }
+
+  async function handleUpload(file: File) {
+    if (!uploadPath || uploadingRef.current) return;
+    uploadingRef.current = true;
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await apiUpload(uploadPath, formData);
+      const url = (res.data as { url?: string })?.url;
+      if (!url) throw new Error('Upload did not return a URL');
+      addImage(url);
+      toast.success('Image uploaded');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      uploadingRef.current = false;
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   }
 
   return (
     <div className="space-y-4">
       <FormField
         label="Product images"
-        hint="Add one or more image URLs. Mark one as primary — that thumbnail shows in the products list."
+        hint="Upload images or paste URLs. Mark one as primary — that thumbnail shows in the products list."
       >
         <div className="space-y-3">
+          {uploadPath ? (
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleUpload(file);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                Upload image
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => addImage()}>
+                <Plus className="h-4 w-4" />
+                Add URL
+              </Button>
+            </div>
+          ) : null}
           {images.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
               <ImageIcon className="mb-2 h-8 w-8 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">No images yet</p>
-              <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addImage}>
-                <Plus className="h-4 w-4" />
-                Add image
-              </Button>
+              {!uploadPath ? (
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => addImage()}>
+                  <Plus className="h-4 w-4" />
+                  Add image
+                </Button>
+              ) : null}
             </div>
           ) : (
             images.map((img, index) => (
@@ -114,12 +170,12 @@ export function ProductImagesField({ images, onChange }: ProductImagesFieldProps
           )}
         </div>
       </FormField>
-      {images.length > 0 && (
-        <Button type="button" variant="outline" size="sm" onClick={addImage}>
+      {images.length > 0 && !uploadPath ? (
+        <Button type="button" variant="outline" size="sm" onClick={() => addImage()}>
           <Plus className="h-4 w-4" />
           Add another image
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }

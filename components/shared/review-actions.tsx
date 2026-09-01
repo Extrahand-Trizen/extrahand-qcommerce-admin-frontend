@@ -9,6 +9,7 @@ interface ReviewActionsProps {
   onRequestChanges: () => void;
   onReject: () => void;
   isPending?: boolean;
+  approveDisabled?: boolean;
   commentLabel?: string;
   commentPlaceholder?: string;
 }
@@ -20,6 +21,7 @@ export function ReviewActions({
   onRequestChanges,
   onReject,
   isPending,
+  approveDisabled,
   commentLabel = 'Admin Comment',
   commentPlaceholder = 'Optional comment for the seller...',
 }: ReviewActionsProps) {
@@ -35,7 +37,7 @@ export function ReviewActions({
         />
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="success" onClick={onApprove} disabled={isPending}>
+        <Button variant="success" onClick={onApprove} disabled={isPending || approveDisabled}>
           {isPending ? 'Processing...' : 'Approve'}
         </Button>
         <Button variant="outline" onClick={onRequestChanges} disabled={isPending}>

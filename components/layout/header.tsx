@@ -22,6 +22,8 @@ function getPageTitle(pathname: string | null): string {
   if (!pathname) return 'Dashboard';
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/sellers/approvals/')) return 'Seller Approval';
+  if (pathname.startsWith('/products/')) return 'Product Details';
+  if (pathname.startsWith('/product-submissions/')) return 'Submission Review';
   const match = Object.keys(PAGE_TITLES).find((k) => pathname.startsWith(k + '/'));
   return match ? PAGE_TITLES[match] : 'Admin';
 }

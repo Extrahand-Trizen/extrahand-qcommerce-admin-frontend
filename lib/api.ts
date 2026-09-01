@@ -13,7 +13,14 @@ export async function api<T>(
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Request failed');
+  if (!res.ok) {
+    const detailText = Array.isArray(json.details)
+      ? json.details.join(', ')
+      : typeof json.details === 'string'
+        ? json.details
+        : '';
+    throw new Error(detailText ? `${json.error || 'Request failed'}: ${detailText}` : json.error || 'Request failed');
+  }
   return json;
 }
 
@@ -36,6 +43,7 @@ export const endpoints = {
   attributes: '/attributes',
   productTypeAttributes: (id: string) => `/product-type-attributes/${id}`,
   masterProducts: '/master-products',
+  masterProductUpload: '/master-products/upload-image',
   productBrands: '/master-products/meta/brands',
   productSubmissions: '/product-submissions',
   sellers: '/sellers',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,8 @@ import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-state
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { ProductFormDialog } from '@/components/products/product-form-dialog';
 import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
-import { Pencil, Plus, Package, CheckCircle2, FileEdit, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Pencil, Plus, Package, CheckCircle2, FileEdit, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 type NamedRef = { _id: string; name: string };
@@ -33,6 +34,11 @@ export default function ProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Record<string, unknown> | null>(null);
   const qc = useQueryClient();
+
+  useEffect(() => {
+    const categoryId = new URLSearchParams(window.location.search).get('categoryId');
+    if (categoryId) setCategoryFilter(categoryId);
+  }, []);
 
   const { data: categories } = useQuery({
     queryKey: ['categories-all'],
@@ -188,7 +194,11 @@ export default function ProductsPage() {
                           <Package className="h-4 w-4 text-muted-foreground" />
                         )}
                       </div>
-                      <p className="font-medium">{String(p.name)}</p>
+                      <p className="font-medium">
+                        <Link href={`/products/${String(p._id)}`} className="hover:text-amber-700 hover:underline">
+                          {String(p.name)}
+                        </Link>
+                      </p>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{refName(p.categoryId)}</TableCell>
@@ -203,6 +213,11 @@ export default function ProductsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-0.5">
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/products/${String(p._id)}`} title="View details">
+                          <Eye className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -210,6 +225,7 @@ export default function ProductsPage() {
                           setEditingId(String(p._id));
                           setFormOpen(true);
                         }}
+                        title="Edit product"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>

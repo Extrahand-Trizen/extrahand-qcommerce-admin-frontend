@@ -10,40 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BrandSelect } from '@/components/products/brand-select';
 import { ProductImagesField } from '@/components/products/product-images-field';
+import {
+  EMPTY_PRODUCT_INFORMATION,
+  ProductInformationFields,
+  productInformationFromApi,
+  productInformationToPayload,
+  type ProductInformationFormState,
+} from '@/components/products/product-information-fields';
 import { FormSection } from '@/components/shared/form-section';
 import { FormField } from '@/components/shared/form-field';
+import {
+  ProductTypeAttributeFields,
+  getVisibleAttributes,
+  type AttrMapping,
+} from '@/components/products/product-type-attribute-fields';
 import { toast } from 'sonner';
 
-const HIDDEN_ATTR_KEYS = new Set(['brand', 'pack_size', 'unit', 'quantity']);
-
-const ATTR_HINTS: Record<string, string> = {
-  weight: 'How much the customer gets — e.g. 1 kg, 500 g, 250 ml',
-  sold_as: 'How this item is sold — as a pack, loose, or per piece',
-  variety: 'Specific variety if applicable — e.g. Royal Gala, Robusta',
-  organic: 'Is this product certified organic?',
-  country_origin: 'Country or region of origin',
-  pack_size: 'Pack description for packaged goods — e.g. 500 g, 1 L',
-};
-
-const ATTR_PLACEHOLDERS: Record<string, string> = {
-  weight: 'e.g. 1 kg',
-  variety: 'e.g. Royal Gala',
-  pack_size: 'e.g. 500 g',
-  country_origin: 'e.g. India',
-};
-
 type NamedRef = { _id: string; name: string };
-
-type AttrMapping = {
-  attributeId: {
-    _id: string;
-    name: string;
-    key?: string;
-    type: string;
-    options?: Array<{ value: string; label: string }>;
-  };
-  isRequired: boolean;
-};
 
 function refName(value: unknown): string {
   if (value && typeof value === 'object' && 'name' in value) return String((value as NamedRef).name);
@@ -71,6 +54,14 @@ function formatAttrValue(value: unknown): string {
   return value == null ? '' : String(value);
 }
 
+function parsePriceToPaise(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const rupees = Number(trimmed);
+  if (Number.isNaN(rupees) || rupees < 0) return undefined;
+  return Math.round(rupees * 100);
+}
+
 interface ProductFormDialogProps {
   open: boolean;
   productId?: string | null;
@@ -89,9 +80,15 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
     brand: '',
     description: '',
     sku: '',
+    gtin: '',
+    complianceInfo: '',
+    sellingPrice: '',
     status: 'ACTIVE',
   });
   const [attributes, setAttributes] = useState<Record<string, string>>({});
+  const [productInformation, setProductInformation] = useState<ProductInformationFormState>(
+    EMPTY_PRODUCT_INFORMATION,
+  );
   const [images, setImages] = useState<Array<{ imageUrl: string; isPrimary: boolean }>>([]);
 
   const { data: brands = [] } = useQuery({
@@ -119,7 +116,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
     queryFn: async () =>
       (await api<{ items: Array<{ _id: string; name: string }> }>(`${endpoints.categories}?status=ACTIVE&limit=100`))
         .data?.items || [],
-    enabled: open && !isEdit,
+    enabled: open,
   });
 
   const { data: subcategories } = useQuery({
@@ -132,7 +129,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
             )
           ).data?.items || []
         : [],
-    enabled: open && !isEdit && !!categoryId,
+    enabled: open && !!categoryId,
   });
 
   const { data: productTypes } = useQuery({
@@ -145,23 +142,21 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
             )
           ).data?.items || []
         : [],
-    enabled: open && !isEdit && !!subcategoryId,
+    enabled: open && !!subcategoryId,
   });
 
-  const activeProductTypeId = isEdit ? refId(productData?.product.productTypeId) : productTypeId;
-
   const { data: typeAttributes } = useQuery({
-    queryKey: ['pta', activeProductTypeId],
+    queryKey: ['pta', productTypeId],
     queryFn: async () =>
-      activeProductTypeId
-        ? (await api<AttrMapping[]>(endpoints.productTypeAttributes(activeProductTypeId))).data || []
+      productTypeId
+        ? (await api<AttrMapping[]>(endpoints.productTypeAttributes(productTypeId))).data || []
         : [],
-    enabled: open && !!activeProductTypeId,
+    enabled: open && !!productTypeId,
   });
 
   const visibleAttributes = useMemo(
-    () => typeAttributes?.filter((ta) => !HIDDEN_ATTR_KEYS.has(ta.attributeId.key || '')) || [],
-    [typeAttributes]
+    () => getVisibleAttributes(typeAttributes),
+    [typeAttributes],
   );
 
   useEffect(() => {
@@ -170,18 +165,35 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
       setCategoryId('');
       setSubcategoryId('');
       setProductTypeId('');
-      setForm({ name: '', brand: '', description: '', sku: '', status: 'ACTIVE' });
+      setForm({
+        name: '',
+        brand: '',
+        description: '',
+        sku: '',
+        gtin: '',
+        complianceInfo: '',
+        sellingPrice: '',
+        status: 'ACTIVE',
+      });
       setAttributes({});
+      setProductInformation(EMPTY_PRODUCT_INFORMATION);
       setImages([]);
       return;
     }
     if (!productData?.product) return;
     const p = productData.product;
+    setCategoryId(refId(p.categoryId));
+    setSubcategoryId(refId(p.subcategoryId));
+    setProductTypeId(refId(p.productTypeId));
     setForm({
       name: String(p.name || ''),
       brand: String(p.brand || ''),
       description: String(p.description || ''),
       sku: String(p.sku || ''),
+      gtin: String(p.gtin || ''),
+      complianceInfo: String(p.complianceInfo || ''),
+      sellingPrice:
+        p.sellingPricePaise != null ? String(Number(p.sellingPricePaise) / 100) : '',
       status: String(p.status || 'ACTIVE'),
     });
     const attrs: Record<string, string> = {};
@@ -190,6 +202,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
       attrs[String(id)] = formatAttrValue(a.value);
     }
     setAttributes(attrs);
+    setProductInformation(productInformationFromApi(p.productInformation));
     const loaded = (productData.images || []).map((img, i) => ({
       imageUrl: String(img.imageUrl || ''),
       isPrimary: Boolean(img.isPrimary) || i === 0,
@@ -214,20 +227,31 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
         cleanedImages[0].isPrimary = true;
       }
 
-      const payload = {
+      const sellingPricePaise = parsePriceToPaise(form.sellingPrice);
+
+      const payload: Record<string, unknown> = {
         name: form.name,
         brand: form.brand || undefined,
         description: form.description || undefined,
         sku: form.sku,
+        gtin: form.gtin.trim() || undefined,
+        complianceInfo: form.complianceInfo.trim() || undefined,
         status: form.status,
         attributes: attrValues,
         images: cleanedImages,
+        productInformation: productInformationToPayload(productInformation),
+        ...(sellingPricePaise != null ? { sellingPricePaise } : {}),
       };
 
       if (isEdit) {
         return api(`${endpoints.masterProducts}/${productId}`, {
           method: 'PATCH',
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            categoryId,
+            subcategoryId,
+            productTypeId,
+          }),
         });
       }
 
@@ -254,7 +278,102 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
   const canSubmit =
     form.name.trim() &&
     form.sku.trim() &&
-    (isEdit || (categoryId && subcategoryId && productTypeId));
+    categoryId &&
+    subcategoryId &&
+    productTypeId;
+
+  const catalogueSection = (
+    <FormSection
+      title={isEdit ? 'Catalogue placement' : '1. Catalogue placement'}
+      description="Pick where this product sits in the catalogue tree."
+    >
+      <div className="grid gap-5 sm:grid-cols-3">
+        <FormField
+          label="Category"
+          required
+          hint="Top-level group (e.g. Fresh & Daily Essentials)."
+        >
+          <Select
+            value={categoryId || undefined}
+            onValueChange={(v) => {
+              setCategoryId(v);
+              setSubcategoryId('');
+              setProductTypeId('');
+              setAttributes({});
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories?.map((c) => (
+                <SelectItem key={c._id} value={c._id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+        <FormField
+          label="Subcategory"
+          required
+          hint="Choose category first, then subcategory."
+        >
+          <Select
+            value={subcategoryId || undefined}
+            onValueChange={(v) => {
+              setSubcategoryId(v);
+              setProductTypeId('');
+              setAttributes({});
+            }}
+            disabled={!categoryId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={categoryId ? 'Select a subcategory' : 'Select category first'} />
+            </SelectTrigger>
+            <SelectContent>
+              {subcategories?.map((s) => (
+                <SelectItem key={s._id} value={s._id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+        <FormField
+          label="Product Type"
+          required
+          hint="Shared type for similar products (e.g. Fresh Fruits)."
+        >
+          <Select
+            value={productTypeId || undefined}
+            onValueChange={(v) => {
+              setProductTypeId(v);
+              setAttributes({});
+            }}
+            disabled={!subcategoryId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={subcategoryId ? 'Select a product type' : 'Select subcategory first'} />
+            </SelectTrigger>
+            <SelectContent>
+              {productTypes?.map((pt) => (
+                <SelectItem key={pt._id} value={pt._id}>
+                  {pt.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+      </div>
+      {isEdit && productData?.product ? (
+        <p className="text-xs text-muted-foreground">
+          Current: {refName(productData.product.categoryId)} → {refName(productData.product.subcategoryId)} →{' '}
+          {refName(productData.product.productTypeId)}
+        </p>
+      ) : null}
+    </FormSection>
+  );
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -263,7 +382,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
           <DialogTitle>{isEdit ? 'Edit Product' : 'Add Product'}</DialogTitle>
           <p className="text-sm text-muted-foreground">
             {isEdit
-              ? 'Update product details and specifications. Required fields are marked *.'
+              ? 'Update catalogue placement, product details, specifications, and images.'
               : 'Choose catalogue placement, then fill product details. Required fields are marked *.'}
           </p>
         </DialogHeader>
@@ -278,110 +397,10 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
               if (canSubmit) saveMutation.mutate();
             }}
           >
-            {isEdit ? (
-              <div className="grid gap-3 rounded-lg border border-border bg-slate-50 p-4 text-sm sm:grid-cols-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Category</p>
-                  <p className="mt-1 font-medium">{refName(productData?.product.categoryId)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Subcategory</p>
-                  <p className="mt-1 font-medium">{refName(productData?.product.subcategoryId)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Product Type</p>
-                  <p className="mt-1 font-medium">{refName(productData?.product.productTypeId)}</p>
-                </div>
-              </div>
-            ) : (
-              <FormSection
-                title="1. Catalogue placement"
-                description="Pick where this product sits in the catalogue tree."
-              >
-                <div className="grid gap-5 sm:grid-cols-3">
-                  <FormField
-                    label="Category"
-                    required
-                    hint="Top-level group (e.g. Fresh & Daily Essentials)."
-                  >
-                    <Select
-                      value={categoryId}
-                      onValueChange={(v) => {
-                        setCategoryId(v);
-                        setSubcategoryId('');
-                        setProductTypeId('');
-                        setAttributes({});
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories?.map((c) => (
-                          <SelectItem key={c._id} value={c._id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-                  <FormField
-                    label="Subcategory"
-                    required
-                    hint="Choose category first, then subcategory."
-                  >
-                    <Select
-                      value={subcategoryId}
-                      onValueChange={(v) => {
-                        setSubcategoryId(v);
-                        setProductTypeId('');
-                        setAttributes({});
-                      }}
-                      disabled={!categoryId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={categoryId ? 'Select a subcategory' : 'Select category first'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subcategories?.map((s) => (
-                          <SelectItem key={s._id} value={s._id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-                  <FormField
-                    label="Product Type"
-                    required
-                    hint="Shared type for similar products (e.g. Fresh Fruits)."
-                  >
-                    <Select
-                      value={productTypeId}
-                      onValueChange={(v) => {
-                        setProductTypeId(v);
-                        setAttributes({});
-                      }}
-                      disabled={!subcategoryId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={subcategoryId ? 'Select a product type' : 'Select subcategory first'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {productTypes?.map((pt) => (
-                          <SelectItem key={pt._id} value={pt._id}>
-                            {pt.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormField>
-                </div>
-              </FormSection>
-            )}
+            {catalogueSection}
 
             <FormSection
-              title={isEdit ? 'Product details' : '2. Product details'}
+              title={isEdit ? 'Basic details' : '2. Basic details'}
               description="Core identity of this master product."
             >
               <div className="grid gap-5 sm:grid-cols-2">
@@ -404,6 +423,19 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                   brands={brands}
                 />
                 <FormField
+                  label="Reference selling price (₹)"
+                  hint="Default price shown in the master catalogue. Sellers can override on their listing."
+                >
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 45"
+                    value={form.sellingPrice}
+                    onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
+                  />
+                </FormField>
+                <FormField
                   label="SKU"
                   required
                   hint="Unique stock-keeping code. Must not match another product."
@@ -413,6 +445,13 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                     value={form.sku}
                     onChange={(e) => setForm({ ...form, sku: e.target.value })}
                     required
+                  />
+                </FormField>
+                <FormField label="GTIN" hint="Optional barcode (8–14 digits).">
+                  <Input
+                    placeholder="e.g. 8901234567890"
+                    value={form.gtin}
+                    onChange={(e) => setForm({ ...form, gtin: e.target.value })}
                   />
                 </FormField>
                 <FormField label="Status" hint="Active products can be listed by sellers.">
@@ -439,82 +478,53 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                   />
                 </FormField>
+                <FormField
+                  label="Compliance info"
+                  className="sm:col-span-2"
+                  hint="Optional regulatory or compliance notes."
+                >
+                  <Textarea
+                    placeholder="e.g. FSSAI licence details, allergen warnings"
+                    rows={2}
+                    value={form.complianceInfo}
+                    onChange={(e) => setForm({ ...form, complianceInfo: e.target.value })}
+                  />
+                </FormField>
               </div>
             </FormSection>
 
-            {activeProductTypeId && (
+            {productTypeId && (
               <FormSection
-                title={isEdit ? 'Specifications' : '3. Specifications'}
+                title={isEdit ? 'Product type attributes' : '3. Product type attributes'}
                 description={
                   visibleAttributes.length
-                    ? 'Values for this product type. Net Weight = how much; Sold As = Pack / Loose / Piece.'
+                    ? 'Catalogue specifications from the selected product type. Use Net content for amount + unit (e.g. 500 g).'
                     : 'No extra specifications for this product type.'
                 }
               >
-                {visibleAttributes.length ? (
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    {visibleAttributes.map((ta) => {
-                      const attr = ta.attributeId;
-                      const key = attr.key || '';
-                      const hint = ATTR_HINTS[key];
-                      return (
-                        <FormField
-                          key={attr._id}
-                          label={attr.name}
-                          required={ta.isRequired}
-                          hint={hint}
-                        >
-                          {attr.type === 'DROPDOWN' ? (
-                            <Select
-                              value={attributes[attr._id] || ''}
-                              onValueChange={(v) => setAttributes({ ...attributes, [attr._id]: v })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder={`Select ${attr.name.toLowerCase()}`} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {attr.options?.map((o) => (
-                                  <SelectItem key={o.value} value={o.value}>
-                                    {o.label || o.value}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : attr.type === 'BOOLEAN' ? (
-                            <Select
-                              value={attributes[attr._id] || ''}
-                              onValueChange={(v) => setAttributes({ ...attributes, [attr._id]: v })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Yes or No" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="false">No</SelectItem>
-                                <SelectItem value="true">Yes</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              placeholder={ATTR_PLACEHOLDERS[key] || `Enter ${attr.name.toLowerCase()}`}
-                              value={attributes[attr._id] || ''}
-                              onChange={(e) => setAttributes({ ...attributes, [attr._id]: e.target.value })}
-                            />
-                          )}
-                        </FormField>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No specification fields configured.</p>
-                )}
+                <ProductTypeAttributeFields
+                  visibleAttributes={visibleAttributes}
+                  attributes={attributes}
+                  onChange={setAttributes}
+                />
               </FormSection>
             )}
 
+            <ProductInformationFields
+              value={productInformation}
+              onChange={setProductInformation}
+              stepLabel={isEdit ? undefined : '4'}
+            />
+
             <FormSection
-              title={isEdit ? 'Images' : '4. Images (optional)'}
+              title={isEdit ? 'Images' : '5. Images (optional)'}
               description="Add one or more photos. The primary image appears in the products list."
             >
-              <ProductImagesField images={images} onChange={setImages} />
+              <ProductImagesField
+                images={images}
+                onChange={setImages}
+                uploadPath={endpoints.masterProductUpload}
+              />
             </FormSection>
 
             <DialogFooter className="gap-2 border-t border-border px-0 pt-4 sm:gap-0">
