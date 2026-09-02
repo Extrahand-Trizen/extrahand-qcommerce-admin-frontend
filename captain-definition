@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "dockerfilePath": "./Dockerfile",
+  "dockerfileBuildArgs": {
+    "NEXT_PUBLIC_API_URL": "%%NEXT_PUBLIC_API_URL%%"
+  }
+}
