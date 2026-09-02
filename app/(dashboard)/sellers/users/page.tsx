@@ -13,6 +13,7 @@ import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-state
 import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 type SellerRow = {
   _id: string;
@@ -114,6 +115,11 @@ export default function SellerUsersPage() {
                   <TableCell className="text-muted-foreground">{s.createdAt ? format(new Date(String(s.createdAt)), 'MMM d, yyyy') : '—'}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
+                      {s.onboardingStatus === 'APPROVED' ? (
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/sellers/stores/${String(s._id)}`}>View store</Link>
+                        </Button>
+                      ) : null}
                       {s.status !== 'ACTIVE' && (
                         <Button size="sm" variant="outline" onClick={() => statusMutation.mutate({ id: String(s._id), status: 'ACTIVE' })}>Activate</Button>
                       )}

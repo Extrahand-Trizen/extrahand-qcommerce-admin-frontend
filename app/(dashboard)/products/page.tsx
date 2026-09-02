@@ -66,7 +66,7 @@ export default function ProductsPage() {
     return {
       total: data?.total ?? 0,
       active: items.filter((p) => p.status === 'ACTIVE').length,
-      draft: items.filter((p) => p.status === 'DRAFT').length,
+      inactive: items.filter((p) => p.status === 'INACTIVE').length,
     };
   }, [data]);
 
@@ -100,7 +100,7 @@ export default function ProductsPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard icon={Package} label="Total Products" value={stats.total} />
         <StatCard icon={CheckCircle2} label="Active (this page)" value={stats.active} />
-        <StatCard icon={FileEdit} label="Draft (this page)" value={stats.draft} />
+        <StatCard icon={FileEdit} label="Inactive (this page)" value={stats.inactive} />
       </div>
 
       <DataTableCard
@@ -148,7 +148,6 @@ export default function ProductsPage() {
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="ACTIVE">Active</SelectItem>
                   <SelectItem value="INACTIVE">Inactive</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
                 </SelectContent>
               </Select>
             </div>

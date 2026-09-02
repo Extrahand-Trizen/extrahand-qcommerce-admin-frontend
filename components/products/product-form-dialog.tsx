@@ -21,6 +21,7 @@ import { FormSection } from '@/components/shared/form-section';
 import { FormField } from '@/components/shared/form-field';
 import {
   ProductTypeAttributeFields,
+  getMissingRequiredAttributeNames,
   getVisibleAttributes,
   type AttrMapping,
 } from '@/components/products/product-type-attribute-fields';
@@ -159,6 +160,11 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
     [typeAttributes],
   );
 
+  const missingRequiredAttrs = useMemo(() => {
+    if (!productTypeId) return [];
+    return getMissingRequiredAttributeNames(visibleAttributes, attributes);
+  }, [productTypeId, visibleAttributes, attributes]);
+
   useEffect(() => {
     if (!open) return;
     if (!isEdit) {
@@ -233,7 +239,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
         name: form.name,
         brand: form.brand || undefined,
         description: form.description || undefined,
-        sku: form.sku,
+        ...(form.sku.trim() ? { sku: form.sku.trim() } : {}),
         gtin: form.gtin.trim() || undefined,
         complianceInfo: form.complianceInfo.trim() || undefined,
         status: form.status,
@@ -277,10 +283,10 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
 
   const canSubmit =
     form.name.trim() &&
-    form.sku.trim() &&
     categoryId &&
     subcategoryId &&
-    productTypeId;
+    productTypeId &&
+    missingRequiredAttrs.length === 0;
 
   const catalogueSection = (
     <FormSection
@@ -394,6 +400,10 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
             className="space-y-7 px-6 py-5"
             onSubmit={(e) => {
               e.preventDefault();
+              if (missingRequiredAttrs.length) {
+                toast.error(`Fill required attributes: ${missingRequiredAttrs.join(', ')}`);
+                return;
+              }
               if (canSubmit) saveMutation.mutate();
             }}
           >
@@ -437,14 +447,12 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                 </FormField>
                 <FormField
                   label="SKU"
-                  required
-                  hint="Unique stock-keeping code. Must not match another product."
+                  hint="Unique stock-keeping code. Leave blank to auto-generate."
                 >
                   <Input
                     placeholder="e.g. MP-FRESH-APPLE-001"
                     value={form.sku}
                     onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                    required
                   />
                 </FormField>
                 <FormField label="GTIN" hint="Optional barcode (8–14 digits).">
@@ -462,7 +470,6 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                     <SelectContent>
                       <SelectItem value="ACTIVE">Active</SelectItem>
                       <SelectItem value="INACTIVE">Inactive</SelectItem>
-                      <SelectItem value="DRAFT">Draft</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormField>

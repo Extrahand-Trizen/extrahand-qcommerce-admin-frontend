@@ -48,4 +48,7 @@ export const endpoints = {
   productSubmissions: '/product-submissions',
   sellers: '/sellers',
   sellerApprovals: '/sellers/approvals/list',
+  sellerStores: '/sellers/stores',
+  sellerStoreCategories: (id: string) => `/sellers/${id}/store/categories`,
+  sellerStoreProducts: (id: string) => `/sellers/${id}/store/products`,
 };

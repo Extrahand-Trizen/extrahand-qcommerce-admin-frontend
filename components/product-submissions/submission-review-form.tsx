@@ -372,6 +372,11 @@ export function SubmissionReviewForm({
           title="Map to existing master product"
           description="Use this when the seller's product already exists in the master catalogue."
         >
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Mapping to an existing Master Product will not modify its name, brand, attributes,
+            Product Information, or images. Only the seller listing and price information will be
+            applied.
+          </div>
           <div className="space-y-4">
             <FormField label="Search catalogue" hint="Search by product name, brand, or SKU.">
               <Input

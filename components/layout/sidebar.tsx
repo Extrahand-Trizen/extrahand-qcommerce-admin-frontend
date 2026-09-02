@@ -34,6 +34,7 @@ const nav = [
     icon: Users,
     children: [
       { name: 'Users', href: '/sellers/users' },
+      { name: 'Stores', href: '/sellers/stores' },
       { name: 'Approvals', href: '/sellers/approvals' },
     ],
   },

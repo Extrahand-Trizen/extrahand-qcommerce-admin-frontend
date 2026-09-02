@@ -15,6 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/products': 'Products',
   '/product-submissions': 'Product Submissions',
   '/sellers/users': 'Seller Users',
+  '/sellers/stores': 'Seller Stores',
   '/sellers/approvals': 'Seller Approvals',
 };
 
@@ -22,6 +23,7 @@ function getPageTitle(pathname: string | null): string {
   if (!pathname) return 'Dashboard';
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/sellers/approvals/')) return 'Seller Approval';
+  if (pathname.startsWith('/sellers/stores/')) return 'Store Details';
   if (pathname.startsWith('/products/')) return 'Product Details';
   if (pathname.startsWith('/product-submissions/')) return 'Submission Review';
   const match = Object.keys(PAGE_TITLES).find((k) => pathname.startsWith(k + '/'));
