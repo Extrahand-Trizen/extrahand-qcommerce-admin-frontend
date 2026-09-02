@@ -3,5 +3,12 @@
   "dockerfilePath": "./Dockerfile",
   "dockerfileBuildArgs": {
     "NEXT_PUBLIC_API_URL": "%%NEXT_PUBLIC_API_URL%%"
+  },
+  "expose": {
+    "web": {
+      "containerPort": 80,
+      "httpPort": 80,
+      "httpsPort": 443
+    }
   }
 }

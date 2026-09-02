@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
 FROM base AS deps
 WORKDIR /app
@@ -12,6 +12,7 @@ COPY . .
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:4010/api/v1
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
 
@@ -19,8 +20,12 @@ FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME=0.0.0.0
+# CapRover routes to container port 80 by default.
+ENV PORT=80
 
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -28,9 +33,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
-EXPOSE 3000
-
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
+EXPOSE 80
 
 CMD ["node", "server.js"]
