@@ -8,14 +8,17 @@ import { StatusBadge } from '@/components/shared/status-badge';
 import { InfoCard } from '@/components/shared/info-card';
 import { ReviewActions } from '@/components/shared/review-actions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { StoreLocationMapDialog } from '@/components/sellers/store-location-map-dialog';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MapPin } from 'lucide-react';
 
 export default function SellerApprovalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [comment, setComment] = useState('');
+  const [mapOpen, setMapOpen] = useState(false);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -93,9 +96,59 @@ export default function SellerApprovalDetailPage() {
         <InfoCard title="Shop Details" items={[
           ['Shop Name', o.shopName], ['Shop Type', o.shopType], ['Shop Mobile', o.shopMobileNumber], ['Description', o.shopDescription],
         ]} />
-        <InfoCard title="Shop Location" items={[
-          ['Address', o.address], ['Area', o.area], ['City', o.city], ['State', o.state], ['Pincode', o.pincode], ['Landmark', o.landmark],
-        ]} />
+        {(() => {
+          const rawLat = o.latitude;
+          const rawLng = o.longitude;
+          const lat = typeof rawLat === 'number' ? rawLat : (rawLat ? parseFloat(String(rawLat)) : null);
+          const lng = typeof rawLng === 'number' ? rawLng : (rawLng ? parseFloat(String(rawLng)) : null);
+          const hasCoordinates = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+
+          return (
+            <>
+              <InfoCard
+                title="Shop Location"
+                items={[
+                  ['Address', o.address],
+                  ['Area', o.area],
+                  ['City', o.city],
+                  ['State', o.state],
+                  ['Pincode', o.pincode],
+                  ['Landmark', o.landmark],
+                  ...(hasCoordinates ? ([['Coordinates', `${lat.toFixed(6)}, ${lng.toFixed(6)}`]] as Array<[string, unknown]>) : []),
+                ]}
+                action={
+                  hasCoordinates ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMapOpen(true)}
+                      className="h-8 gap-1.5 border-amber-300 bg-amber-50/60 font-medium text-amber-900 hover:bg-amber-100 hover:text-amber-950"
+                    >
+                      <MapPin className="h-3.5 w-3.5 text-amber-600" />
+                      View on Map
+                    </Button>
+                  ) : null
+                }
+              />
+              {hasCoordinates ? (
+                <StoreLocationMapDialog
+                  open={mapOpen}
+                  onOpenChange={setMapOpen}
+                  shopName={String(o.shopName || '')}
+                  ownerName={String(o.fullName || '')}
+                  address={String(o.address || '')}
+                  area={String(o.area || '')}
+                  city={String(o.city || '')}
+                  state={String(o.state || '')}
+                  pincode={String(o.pincode || '')}
+                  latitude={lat}
+                  longitude={lng}
+                />
+              ) : null}
+            </>
+          );
+        })()}
         <InfoCard title="Business Details" items={[
           ['Business Type', o.businessType], ['PAN', o.pan], ['GSTIN', o.gstin], ['FSSAI', o.fssaiNumber],
         ]} />

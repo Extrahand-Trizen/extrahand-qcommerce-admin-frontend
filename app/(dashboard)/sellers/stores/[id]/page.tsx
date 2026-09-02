@@ -13,8 +13,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-states';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { StoreLocationMapDialog } from '@/components/sellers/store-location-map-dialog';
 import { cn } from '@/lib/utils';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MapPin } from 'lucide-react';
 
 type StoreCategory = {
   id: string;
@@ -36,7 +38,8 @@ type StoreProduct = {
   compareAtPriceRupees?: number;
   availability: 'available' | 'limited' | 'out_of_stock';
   enabled: boolean;
-  reviewStatus: 'approved' | 'pending_review';
+  isCustomProduct?: boolean;
+  reviewStatus?: 'approved' | 'pending_review' | null;
 };
 
 function formatAvailability(value: StoreProduct['availability']) {
@@ -49,6 +52,7 @@ export default function SellerStoreDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [mapOpen, setMapOpen] = useState(false);
 
   const { data: storeDetail, isLoading: detailLoading } = useQuery({
     queryKey: ['seller-detail', id],
@@ -161,18 +165,61 @@ export default function SellerStoreDetailPage() {
             ['Shop Email', onboarding.shopEmail],
           ]}
         />
-        <InfoCard
-          title="Owner & Location"
-          items={[
-            ['Owner', onboarding.fullName],
-            ['Mobile', onboarding.mobileNumber],
-            ['Email', onboarding.email],
-            ['Address', onboarding.address],
-            ['Area', onboarding.area],
-            ['City', onboarding.city],
-            ['Pincode', onboarding.pincode],
-          ]}
-        />
+        {(() => {
+          const rawLat = onboarding.latitude;
+          const rawLng = onboarding.longitude;
+          const lat = typeof rawLat === 'number' ? rawLat : (rawLat ? parseFloat(String(rawLat)) : null);
+          const lng = typeof rawLng === 'number' ? rawLng : (rawLng ? parseFloat(String(rawLng)) : null);
+          const hasCoordinates = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+
+          return (
+            <>
+              <InfoCard
+                title="Owner & Location"
+                items={[
+                  ['Owner', onboarding.fullName],
+                  ['Mobile', onboarding.mobileNumber],
+                  ['Email', onboarding.email],
+                  ['Address', onboarding.address],
+                  ['Area', onboarding.area],
+                  ['City', onboarding.city],
+                  ['State', onboarding.state],
+                  ['Pincode', onboarding.pincode],
+                  ...(hasCoordinates ? ([['Coordinates', `${lat.toFixed(6)}, ${lng.toFixed(6)}`]] as Array<[string, unknown]>) : []),
+                ]}
+                action={
+                  hasCoordinates ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMapOpen(true)}
+                      className="h-8 gap-1.5 border-amber-300 bg-amber-50/60 font-medium text-amber-900 hover:bg-amber-100 hover:text-amber-950"
+                    >
+                      <MapPin className="h-3.5 w-3.5 text-amber-600" />
+                      View on Map
+                    </Button>
+                  ) : null
+                }
+              />
+              {hasCoordinates ? (
+                <StoreLocationMapDialog
+                  open={mapOpen}
+                  onOpenChange={setMapOpen}
+                  shopName={String(onboarding.shopName || '')}
+                  ownerName={String(onboarding.fullName || '')}
+                  address={String(onboarding.address || '')}
+                  area={String(onboarding.area || '')}
+                  city={String(onboarding.city || '')}
+                  state={String(onboarding.state || '')}
+                  pincode={String(onboarding.pincode || '')}
+                  latitude={lat}
+                  longitude={lng}
+                />
+              ) : null}
+            </>
+          );
+        })()}
       </div>
 
       <Card className="shadow-sm">
@@ -244,7 +291,7 @@ export default function SellerStoreDetailPage() {
                 <TableHead>Variant</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Availability</TableHead>
-                <TableHead>Listing</TableHead>
+                <TableHead className="w-[130px]">Listing</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -290,11 +337,13 @@ export default function SellerStoreDetailPage() {
                     </TableCell>
                     <TableCell>{formatAvailability(product.availability)}</TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col items-start gap-1">
                         <StatusBadge status={product.enabled ? 'ACTIVE' : 'INACTIVE'} />
-                        <StatusBadge
-                          status={product.reviewStatus === 'approved' ? 'APPROVED' : 'PENDING_REVIEW'}
-                        />
+                        {product.isCustomProduct && product.reviewStatus ? (
+                          <StatusBadge
+                            status={product.reviewStatus === 'approved' ? 'APPROVED' : 'PENDING_REVIEW'}
+                          />
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
