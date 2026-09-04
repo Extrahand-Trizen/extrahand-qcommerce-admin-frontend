@@ -44,6 +44,8 @@ export const endpoints = {
   productTypeAttributes: (id: string) => `/product-type-attributes/${id}`,
   masterProducts: '/master-products',
   masterProductUpload: '/master-products/upload-image',
+  categoryUpload: '/categories/upload-image',
+  subcategoryUpload: '/subcategories/upload-image',
   productBrands: '/master-products/meta/brands',
   productSubmissions: '/product-submissions',
   sellers: '/sellers',

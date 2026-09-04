@@ -21,6 +21,7 @@ import { FormSection } from '@/components/shared/form-section';
 import { FormField } from '@/components/shared/form-field';
 import {
   ProductTypeAttributeFields,
+  NetContentAttributeFields,
   getMissingRequiredAttributeNames,
   getVisibleAttributes,
   type AttrMapping,
@@ -427,11 +428,20 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                     required
                   />
                 </FormField>
-                <BrandSelect
-                  value={form.brand}
-                  onChange={(brand) => setForm({ ...form, brand })}
-                  brands={brands}
-                />
+                <div className="space-y-5">
+                  <BrandSelect
+                    value={form.brand}
+                    onChange={(brand) => setForm({ ...form, brand })}
+                    brands={brands}
+                  />
+                  {productTypeId ? (
+                    <NetContentAttributeFields
+                      visibleAttributes={visibleAttributes}
+                      attributes={attributes}
+                      onChange={setAttributes}
+                    />
+                  ) : null}
+                </div>
                 <FormField
                   label="Reference selling price (₹)"
                   hint="Default price shown in the master catalogue. Sellers can override on their listing."
@@ -513,6 +523,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                   visibleAttributes={visibleAttributes}
                   attributes={attributes}
                   onChange={setAttributes}
+                    hideNetContent
                 />
               </FormSection>
             )}

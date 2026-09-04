@@ -4,13 +4,24 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, FolderTree, Package, Users, ChevronDown, ChevronRight, X,
+  LayoutDashboard, FolderTree, Package, Users, ChevronDown, ChevronRight, X, Shield, Mail, Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/hooks/useAuth';
 
-const nav = [
+type NavItem = {
+  name: string;
+  href?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children?: Array<{ name: string; href: string }>;
+};
+
+const dashboardNav: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+];
+
+const catalogueNav: NavItem[] = [
   {
     name: 'Catalogue',
     icon: FolderTree,
@@ -29,24 +40,41 @@ const nav = [
       { name: 'Submissions', href: '/product-submissions' },
     ],
   },
+];
+
+const sellersNav: NavItem[] = [
   {
     name: 'Sellers',
     icon: Users,
     children: [
-      { name: 'Users', href: '/sellers/users' },
-      { name: 'Stores', href: '/sellers/stores' },
-      { name: 'Approvals', href: '/sellers/approvals' },
+      { name: 'Seller Applications', href: '/sellers/approvals' },
+      { name: 'Seller Users', href: '/sellers/users' },
+      { name: 'Seller Stores', href: '/sellers/stores' },
     ],
   },
 ];
 
 export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
+  const { isSuperAdmin, isCatalogueAdmin, isSellerOpsAdmin } = useAuth();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     Catalogue: true,
     Products: true,
     Sellers: true,
   });
+  const [superAdminOpen, setSuperAdminOpen] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (pathname?.startsWith('/admin')) {
+      setSuperAdminOpen(true);
+    }
+  }, [pathname]);
+
+  const nav = isSellerOpsAdmin
+    ? [...dashboardNav, ...sellersNav]
+    : isCatalogueAdmin
+      ? [...dashboardNav, ...catalogueNav]
+      : [...dashboardNav, ...catalogueNav, ...sellersNav];
 
   return (
     <>
@@ -123,8 +151,8 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
             const linkActive = pathname === item.href;
             return (
               <Link
-                key={item.href}
-                href={item.href!}
+                key={item.href || item.name}
+                href={item.href || '#'}
                 onClick={onClose}
                 className={cn(
                   'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium',
@@ -136,6 +164,72 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
               </Link>
             );
           })}
+
+          {/* Super Admin Section - only visible to SUPER_ADMIN */}
+          {isSuperAdmin && (
+            <div className="mt-4 pt-3 border-t border-border">
+              <button
+                onClick={() => setSuperAdminOpen((prev) => !prev)}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors',
+                  pathname?.startsWith('/admin')
+                    ? 'text-amber-900 font-semibold bg-amber-50/60'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                <Shield className="h-4 w-4 shrink-0 text-amber-600" />
+                <span className="flex-1 text-left">Super Admin</span>
+                {superAdminOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+              </button>
+              {superAdminOpen && (
+                <div className="mb-1 ml-3 mt-1 space-y-0.5 border-l border-border pl-2">
+                  <Link
+                    href="/admin/users"
+                    onClick={onClose}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                      pathname === '/admin/users' || pathname?.startsWith('/admin/users/')
+                        ? 'bg-amber-50 font-medium text-amber-900'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    Admin Users
+                  </Link>
+                  <Link
+                    href="/admin/invites"
+                    onClick={onClose}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                      pathname === '/admin/invites' || pathname?.startsWith('/admin/invites/')
+                        ? 'bg-amber-50 font-medium text-amber-900'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    Invitations
+                  </Link>
+                  <Link
+                    href="/admin/settings"
+                    onClick={onClose}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                      pathname === '/admin/settings' || pathname?.startsWith('/admin/settings/')
+                        ? 'bg-amber-50 font-medium text-amber-900'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    Settings
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </nav>
       </aside>
     </>

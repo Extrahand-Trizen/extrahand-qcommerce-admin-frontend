@@ -160,14 +160,77 @@ interface ProductTypeAttributeFieldsProps {
   visibleAttributes: AttrMapping[];
   attributes: Record<string, string>;
   onChange: (attributes: Record<string, string>) => void;
+  hideNetContent?: boolean;
+}
+
+interface NetContentAttributeFieldsProps {
+  visibleAttributes: AttrMapping[];
+  attributes: Record<string, string>;
+  onChange: (attributes: Record<string, string>) => void;
+}
+
+function getNetContentMappings(visibleAttributes: AttrMapping[]) {
+  const byKey = new Map(visibleAttributes.map((ta) => [ta.attributeId.key || '', ta]));
+  const netQuantity = byKey.get('net_quantity');
+  const unit = byKey.get('unit');
+  return netQuantity && unit ? { netQuantity, unit } : null;
+}
+
+export function NetContentAttributeFields({
+  visibleAttributes,
+  attributes,
+  onChange,
+}: NetContentAttributeFieldsProps) {
+  const mappings = getNetContentMappings(visibleAttributes);
+  if (!mappings) return null;
+
+  const { netQuantity, unit } = mappings;
+  const amountId = netQuantity.attributeId._id;
+  const unitId = unit.attributeId._id;
+  const preview = formatNetContentLabel(attributes[amountId] || '', attributes[unitId] || '');
+
+  return (
+    <FormField
+      label="Net content"
+      required={netQuantity.isRequired || unit.isRequired}
+      hint="How much the customer actually receives. Enter the amount and unit separately — e.g. 500 + g = 500 g, 1 + L = 1 L, 6 + pcs = 6 pcs."
+    >
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Amount</p>
+          <Input
+            type="number"
+            min="0"
+            step="any"
+            placeholder="e.g. 500"
+            value={attributes[amountId] || ''}
+            onChange={(e) => onChange({ ...attributes, [amountId]: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Unit</p>
+          {renderAttributeControl(unit, attributes, onChange)}
+        </div>
+      </div>
+      {preview ? (
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          Customer receives: <span className="font-semibold">{preview}</span>
+        </p>
+      ) : null}
+    </FormField>
+  );
 }
 
 export function ProductTypeAttributeFields({
   visibleAttributes,
   attributes,
   onChange,
+  hideNetContent = false,
 }: ProductTypeAttributeFieldsProps) {
-  const blocks = useMemo(() => buildAttributeBlocks(visibleAttributes), [visibleAttributes]);
+  const blocks = useMemo(
+    () => buildAttributeBlocks(visibleAttributes).filter((block) => !hideNetContent || block.kind !== 'net_content'),
+    [visibleAttributes, hideNetContent],
+  );
 
   if (!blocks.length) {
     return <p className="text-sm text-muted-foreground">No specification fields configured.</p>;
@@ -177,43 +240,7 @@ export function ProductTypeAttributeFields({
     <div className="grid gap-5 sm:grid-cols-2">
       {blocks.map((block) => {
         if (block.kind === 'net_content') {
-          const { netQuantity, unit } = block;
-          const amountId = netQuantity.attributeId._id;
-          const unitId = unit.attributeId._id;
-          const preview = formatNetContentLabel(attributes[amountId] || '', attributes[unitId] || '');
-
-          return (
-            <FormField
-              key="net_content"
-              label="Net content"
-              required={netQuantity.isRequired || unit.isRequired}
-              className="sm:col-span-2"
-              hint="How much the customer actually receives. Enter the amount and unit separately — e.g. 500 + g = 500 g, 1 + L = 1 L, 6 + pcs = 6 pcs."
-            >
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">Amount</p>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="any"
-                    placeholder="e.g. 500"
-                    value={attributes[amountId] || ''}
-                    onChange={(e) => onChange({ ...attributes, [amountId]: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">Unit</p>
-                  {renderAttributeControl(unit, attributes, onChange)}
-                </div>
-              </div>
-              {preview ? (
-                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-                  Customer receives: <span className="font-semibold">{preview}</span>
-                </p>
-              ) : null}
-            </FormField>
-          );
+          return <NetContentAttributeFields key="net_content" visibleAttributes={visibleAttributes} attributes={attributes} onChange={onChange} />;
         }
 
         const { mapping } = block;

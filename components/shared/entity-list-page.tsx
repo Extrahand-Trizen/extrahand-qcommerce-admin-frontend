@@ -41,6 +41,8 @@ export interface Field {
   hint?: string;
   /** Groups fields in the create/edit dialog */
   section?: string;
+  /** API path used to upload an image for imageUrl fields. */
+  uploadPath?: string;
 }
 
 interface EntityListPageProps {
@@ -253,6 +255,7 @@ export function EntityListPage({
             onChange={(v) => setField(field.name, v)}
             placeholder={field.placeholder}
             alt={form.name || field.label}
+            uploadPath={field.uploadPath}
           />
         ) : field.type === 'category' ? (
           <Select value={form[field.name] || undefined} onValueChange={(v) => setField(field.name, v)}>

@@ -4,11 +4,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, endpoints } from '@/lib/api';
 
-interface User {
+export interface User {
   id: string;
+  userId?: string;
   email: string;
   name: string;
   role: string;
+  status?: string;
+  isSuperAdmin?: boolean;
 }
 
 export function useAuth() {
@@ -51,5 +54,9 @@ export function useAuth() {
     router.replace('/login');
   }
 
-  return { user, loading, isAuthenticated: !!user, login, logout };
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || Boolean(user?.isSuperAdmin);
+  const isCatalogueAdmin = user?.role === 'CATALOGUE_ADMIN';
+  const isSellerOpsAdmin = user?.role === 'SELLER_OPERATIONS_ADMIN';
+
+  return { user, loading, isAuthenticated: !!user, isSuperAdmin, isCatalogueAdmin, isSellerOpsAdmin, login, logout };
 }
