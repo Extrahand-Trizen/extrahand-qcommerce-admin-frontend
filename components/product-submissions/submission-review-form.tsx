@@ -45,6 +45,9 @@ export type SubmissionReviewPayload = {
   images?: ProductImageDraft[];
   productInformation?: ReturnType<typeof productInformationToPayload>;
   sellingPricePaise?: number;
+  quantity?: number;
+  lifespanValue?: number;
+  lifespanUnit?: string;
   createSellerListing?: boolean;
 };
 
@@ -111,6 +114,9 @@ export function SubmissionReviewForm({
     gtin: '',
     complianceInfo: '',
     sellingPrice: submission.sellingPricePaise != null ? String(Number(submission.sellingPricePaise) / 100) : '',
+    quantity: submission.quantity != null ? String(submission.quantity) : '',
+    lifespanValue: submission.lifespanValue != null ? String(submission.lifespanValue) : '',
+    lifespanUnit: String(submission.lifespanUnit || 'Days'),
   });
   const [attributes, setAttributes] = useState<Record<string, string>>({});
   const [productInformation, setProductInformation] = useState<ProductInformationFormState>(
@@ -217,6 +223,8 @@ export function SubmissionReviewForm({
     }
 
     const sellingPricePaise = parsePriceToPaise(form.sellingPrice);
+    const qtyNum = form.quantity.trim() ? Number(form.quantity.trim()) : undefined;
+    const lvNum = form.lifespanValue.trim() ? Number(form.lifespanValue.trim()) : undefined;
 
     if (action === 'APPROVE' && approvalMode === 'map') {
       return {
@@ -224,6 +232,7 @@ export function SubmissionReviewForm({
         adminComment: comment || undefined,
         masterProductId,
         sellingPricePaise,
+        quantity: qtyNum != null && !Number.isNaN(qtyNum) ? qtyNum : undefined,
         createSellerListing,
       };
     }
@@ -243,6 +252,9 @@ export function SubmissionReviewForm({
       images: cleanedImages,
       productInformation: productInformationToPayload(productInformation),
       sellingPricePaise,
+      quantity: qtyNum != null && !Number.isNaN(qtyNum) ? qtyNum : undefined,
+      lifespanValue: lvNum != null && !Number.isNaN(lvNum) ? lvNum : undefined,
+      lifespanUnit: form.lifespanUnit || (lvNum ? 'Days' : undefined),
       createSellerListing,
     };
   }
@@ -280,6 +292,8 @@ export function SubmissionReviewForm({
               ['Brand', submission.brand],
               ['Pack / Sold As', submission.packOrSoldAs],
               ['Selling Price', formatPaise(submission.sellingPricePaise as number | undefined)],
+              ['Requested Stock', submission.quantity != null ? String(submission.quantity) : '—'],
+              ['Requested Lifespan', submission.lifespanValue != null ? `${submission.lifespanValue} ${submission.lifespanUnit || 'Days'}` : '—'],
               ['Description', submission.description],
             ]}
           />
@@ -292,18 +306,39 @@ export function SubmissionReviewForm({
             ]}
           />
         </div>
-        {submission.photoUrl ? (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Seller Photo</CardTitle></CardHeader>
-            <CardContent>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={String(submission.photoUrl)}
-                alt="Seller submission"
-                className="max-h-48 rounded-lg border object-cover"
-              />
-            </CardContent>
-          </Card>
+        {submission.frontImageUrl || submission.photoUrl || submission.ingredientsImageUrl ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {submission.frontImageUrl || submission.photoUrl ? (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Front / Packaging Photo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={String(submission.frontImageUrl || submission.photoUrl)}
+                    alt="Front packaging"
+                    className="max-h-48 rounded-lg border object-cover"
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+            {submission.ingredientsImageUrl ? (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Ingredients Photo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={String(submission.ingredientsImageUrl)}
+                    alt="Ingredients label"
+                    className="max-h-48 rounded-lg border object-cover"
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
         ) : null}
       </div>
     );
@@ -321,23 +356,44 @@ export function SubmissionReviewForm({
             ['Brand', submission.brand || '—'],
             ['Pack / Sold As', submission.packOrSoldAs || '—'],
             ['Selling Price', formatPaise(submission.sellingPricePaise as number | undefined)],
+            ['Requested Stock', submission.quantity != null ? String(submission.quantity) : '—'],
+            ['Requested Lifespan', submission.lifespanValue != null ? `${submission.lifespanValue} ${submission.lifespanUnit || 'Days'}` : '—'],
             ['Description', submission.description || '—'],
           ]}
         />
-        {submission.photoUrl ? (
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Seller photo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={String(submission.photoUrl)}
-                alt="Seller submission"
-                className="max-h-40 rounded-lg border object-cover"
-              />
-            </CardContent>
-          </Card>
+        {submission.frontImageUrl || submission.photoUrl || submission.ingredientsImageUrl ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {submission.frontImageUrl || submission.photoUrl ? (
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Front / Packaging Photo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={String(submission.frontImageUrl || submission.photoUrl)}
+                    alt="Front packaging"
+                    className="max-h-44 rounded-lg border object-cover"
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+            {submission.ingredientsImageUrl ? (
+              <Card className="shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Ingredients Photo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={String(submission.ingredientsImageUrl)}
+                    alt="Ingredients label"
+                    className="max-h-44 rounded-lg border object-cover"
+                  />
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -407,6 +463,15 @@ export function SubmissionReviewForm({
                 placeholder="e.g. 45"
                 value={form.sellingPrice}
                 onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
+              />
+            </FormField>
+            <FormField label="Initial Shop Stock" hint="Starting inventory count for this seller.">
+              <Input
+                type="number"
+                min="0"
+                placeholder="e.g. 20"
+                value={form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: e.target.value })}
               />
             </FormField>
           </div>
@@ -488,6 +553,41 @@ export function SubmissionReviewForm({
                   onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
                 />
               </FormField>
+              <FormField label="Initial Shop Stock" hint="Starting inventory count for this seller.">
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 20"
+                  value={form.quantity}
+                  onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                />
+              </FormField>
+              <div className="grid grid-cols-2 gap-2">
+                <FormField label="Lifespan Value" hint="e.g. 7">
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 7"
+                    value={form.lifespanValue}
+                    onChange={(e) => setForm({ ...form, lifespanValue: e.target.value })}
+                  />
+                </FormField>
+                <FormField label="Lifespan Unit">
+                  <Select
+                    value={form.lifespanUnit}
+                    onValueChange={(u) => setForm({ ...form, lifespanUnit: u })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['Days', 'Hours', 'Weeks', 'Months', 'Years'].map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+              </div>
               <FormField label="SKU" hint="Leave blank to auto-generate.">
                 <Input
                   placeholder="Auto-generated if empty"

@@ -85,6 +85,8 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
     complianceInfo: '',
     sellingPrice: '',
     status: 'ACTIVE',
+    lifespanValue: '',
+    lifespanUnit: 'Days',
   });
   const [attributes, setAttributes] = useState<Record<string, string>>({});
   const [productInformation, setProductInformation] = useState<ProductInformationFormState>(
@@ -180,6 +182,8 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
         complianceInfo: '',
         sellingPrice: '',
         status: 'ACTIVE',
+        lifespanValue: '',
+        lifespanUnit: 'Days',
       });
       setAttributes({});
       setProductInformation(EMPTY_PRODUCT_INFORMATION);
@@ -201,6 +205,8 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
       sellingPrice:
         p.sellingPricePaise != null ? String(Number(p.sellingPricePaise) / 100) : '',
       status: String(p.status || 'ACTIVE'),
+      lifespanValue: p.lifespanValue != null ? String(p.lifespanValue) : '',
+      lifespanUnit: String(p.lifespanUnit || 'Days'),
     });
     const attrs: Record<string, string> = {};
     for (const a of p.attributes || []) {
@@ -247,6 +253,8 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
         images: cleanedImages,
         productInformation: productInformationToPayload(productInformation),
         ...(sellingPricePaise != null ? { sellingPricePaise } : {}),
+        lifespanValue: form.lifespanValue.trim() ? Number(form.lifespanValue.trim()) : undefined,
+        lifespanUnit: form.lifespanUnit || (form.lifespanValue.trim() ? 'Days' : undefined),
       };
 
       if (isEdit) {
@@ -473,6 +481,32 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                     </SelectContent>
                   </Select>
                 </FormField>
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField label="Lifespan Value" hint="e.g. 7">
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 7"
+                      value={form.lifespanValue}
+                      onChange={(e) => setForm({ ...form, lifespanValue: e.target.value })}
+                    />
+                  </FormField>
+                  <FormField label="Lifespan Unit">
+                    <Select
+                      value={form.lifespanUnit}
+                      onValueChange={(u) => setForm({ ...form, lifespanUnit: u })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['Days', 'Hours', 'Weeks', 'Months', 'Years'].map((u) => (
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                </div>
                 <FormField
                   label="Description"
                   className="sm:col-span-2"

@@ -94,7 +94,7 @@ export default function SellerApprovalDetailPage() {
           ['Full Name', o.fullName], ['Mobile', o.mobileNumber], ['Email', o.email],
         ]} />
         <InfoCard title="Shop Details" items={[
-          ['Shop Name', o.shopName], ['Shop Type', o.shopType], ['Shop Mobile', o.shopMobileNumber], ['Description', o.shopDescription],
+          ['Shop Name', o.shopName], ['Shop Mobile', o.shopMobileNumber], ['Description', o.shopDescription],
         ]} />
         {(() => {
           const rawLat = o.latitude;
@@ -150,7 +150,7 @@ export default function SellerApprovalDetailPage() {
           );
         })()}
         <InfoCard title="Business Details" items={[
-          ['Business Type', o.businessType], ['PAN', o.pan], ['GSTIN', o.gstin], ['FSSAI', o.fssaiNumber],
+          ['PAN', o.pan], ['GSTIN', o.gstin], ['FSSAI', o.fssaiNumber],
         ]} />
       </div>
 

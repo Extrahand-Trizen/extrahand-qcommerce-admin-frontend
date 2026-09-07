@@ -169,6 +169,7 @@ export function ProductDetailView({ productId }: ProductDetailViewProps) {
             ['Reference Price', formatPaise(p.sellingPricePaise)],
             ['SKU', p.sku],
             ['GTIN', p.gtin],
+            ['Lifespan', p.lifespanValue != null ? `${p.lifespanValue} ${p.lifespanUnit || 'Days'}` : '—'],
             ['Status', p.status],
           ]}
         />
