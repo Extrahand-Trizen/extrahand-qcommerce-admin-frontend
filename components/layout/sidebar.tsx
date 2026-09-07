@@ -37,7 +37,7 @@ const catalogueNav: NavItem[] = [
     icon: Package,
     children: [
       { name: 'Products', href: '/products' },
-      { name: 'Submissions', href: '/product-submissions' },
+      { name: 'Product Submissions', href: '/product-submissions' },
     ],
   },
 ];
