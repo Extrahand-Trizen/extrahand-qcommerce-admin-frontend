@@ -52,7 +52,7 @@ export default function SellerApprovalsPage() {
                 <TableRow key={String(item._id)}>
                   <TableCell className="font-medium">{String(item.fullName)}</TableCell>
                   <TableCell>{String(item.shopName)}</TableCell>
-                  <TableCell className="text-muted-foreground">{String(item.shopType)}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.shopType ? String(item.shopType) : '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{String(item.city)}</TableCell>
                   <TableCell className="text-muted-foreground">{item.submittedAt ? format(new Date(String(item.submittedAt)), 'MMM d, yyyy') : '—'}</TableCell>
                   <TableCell><StatusBadge status={String(item.status)} /></TableCell>

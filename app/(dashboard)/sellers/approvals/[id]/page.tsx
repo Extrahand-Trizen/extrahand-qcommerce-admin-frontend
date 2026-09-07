@@ -14,10 +14,21 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { ArrowLeft, MapPin } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+
+const COMMON_SHOP_TYPES = [
+  'Grocery / Kirana',
+  'Fruits & Vegetables',
+  'Dairy',
+  'Bakery',
+  'General Store',
+  'Other',
+];
 
 export default function SellerApprovalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [comment, setComment] = useState('');
+  const [selectedShopType, setSelectedShopType] = useState('');
   const [mapOpen, setMapOpen] = useState(false);
   const qc = useQueryClient();
 
@@ -36,9 +47,14 @@ export default function SellerApprovalDetailPage() {
 
   const reviewMutation = useMutation({
     mutationFn: async (action: 'approve' | 'reject' | 'request-changes') => {
+      const existingShopType = data?.onboarding?.shopType ? String(data.onboarding.shopType) : '';
+      const finalShopType = selectedShopType.trim() || existingShopType || 'Other';
       return api(`${endpoints.sellers}/${id}/${action}`, {
         method: 'POST',
-        body: JSON.stringify({ comment }),
+        body: JSON.stringify({
+          comment,
+          ...(action === 'approve' ? { shopType: finalShopType } : {}),
+        }),
       });
     },
     onSuccess: () => {
@@ -94,7 +110,17 @@ export default function SellerApprovalDetailPage() {
           ['Full Name', o.fullName], ['Mobile', o.mobileNumber], ['Email', o.email],
         ]} />
         <InfoCard title="Shop Details" items={[
-          ['Shop Name', o.shopName], ['Shop Type', o.shopType], ['Shop Mobile', o.shopMobileNumber], ['Description', o.shopDescription],
+          ['Shop Name', o.shopName],
+          [
+            'Shop Type',
+            o.shopType
+              ? o.shopType
+              : selectedShopType
+                ? `${selectedShopType} (Selected)`
+                : 'Not specified (defaults to Other on approval)',
+          ],
+          ['Shop Mobile', o.shopMobileNumber],
+          ['Description', o.shopDescription],
         ]} />
         {(() => {
           const rawLat = o.latitude;
@@ -213,7 +239,37 @@ export default function SellerApprovalDetailPage() {
 
       <Card className="shadow-sm">
         <CardHeader><CardTitle className="text-base font-semibold">Review Action</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3.5">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="shop-type-select" className="text-sm font-medium">
+                Shop Type {o.shopType ? '' : '(Optional assignment)'}
+              </Label>
+              {!o.shopType ? (
+                <p className="text-xs text-amber-700">
+                  Shop type was not added by the seller. You can select one below or approve directly (will default to &quot;Other&quot;).
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Current shop type submitted by seller. You can change it if necessary before approving.
+                </p>
+              )}
+            </div>
+            <select
+              id="shop-type-select"
+              value={selectedShopType || (o.shopType ? String(o.shopType) : '')}
+              onChange={(e) => setSelectedShopType(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">{o.shopType ? String(o.shopType) : 'Select shop type (or leave empty for Other)'}</option>
+              {COMMON_SHOP_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <ReviewActions
             comment={comment}
             onCommentChange={setComment}
