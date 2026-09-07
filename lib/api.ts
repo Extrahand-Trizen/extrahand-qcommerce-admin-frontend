@@ -12,7 +12,17 @@ export async function api<T>(
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  const json = await res.json();
+  const rawText = await res.text();
+  let json: any;
+  try {
+    json = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    if (!res.ok) {
+      throw new Error(`Request failed with status ${res.status}`);
+    }
+    throw new Error(`Unexpected non-JSON response from server (${res.status})`);
+  }
+
   if (!res.ok) {
     const detailText = Array.isArray(json.details)
       ? json.details.join(', ')

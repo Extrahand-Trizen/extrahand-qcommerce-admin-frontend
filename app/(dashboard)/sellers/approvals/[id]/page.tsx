@@ -160,25 +160,25 @@ export default function SellerApprovalDetailPage() {
           {!data.documents?.length ? (
             <p className="text-muted-foreground text-sm py-4 text-center">No documents uploaded</p>
           ) : (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {data.documents.map((doc) => {
                 const fileUrl = doc.fileUrl ? String(doc.fileUrl) : '';
                 const isImage = /\.(jpg|jpeg|png|webp)$/i.test(fileUrl) || String(doc.mimeType || '').startsWith('image/');
                 return (
-                  <div key={String(doc._id)} className="rounded-lg border border-border p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-medium">{String(doc.documentType).replace(/_/g, ' ')}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{String(doc.fileName)}</p>
-                        {doc.documentNumber ? (
-                          <p className="text-xs text-muted-foreground mt-1">No. {String(doc.documentNumber)}</p>
-                        ) : null}
+                  <div key={String(doc._id)} className="flex flex-col justify-between rounded-lg border border-border p-4 space-y-3">
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium">{String(doc.documentType).replace(/_/g, ' ')}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{String(doc.fileName)}</p>
+                          {doc.documentNumber ? (
+                            <p className="text-xs text-muted-foreground mt-1">No. {String(doc.documentNumber)}</p>
+                          ) : null}
+                        </div>
+                        <StatusBadge status={String(doc.verificationStatus)} />
                       </div>
-                      <StatusBadge status={String(doc.verificationStatus)} />
-                    </div>
-                    {fileUrl ? (
-                      <div className="space-y-2">
-                        {isImage ? (
+                      {fileUrl && isImage ? (
+                        <div>
                           <a href={fileUrl} target="_blank" rel="noopener noreferrer">
                             <img
                               src={fileUrl}
@@ -186,7 +186,11 @@ export default function SellerApprovalDetailPage() {
                               className="max-h-56 rounded-md border object-contain bg-muted/30"
                             />
                           </a>
-                        ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div>
+                      {fileUrl ? (
                         <a
                           href={fileUrl}
                           target="_blank"
@@ -195,10 +199,10 @@ export default function SellerApprovalDetailPage() {
                         >
                           View document
                         </a>
-                      </div>
-                    ) : doc.documentNumber ? (
-                      <p className="text-sm text-muted-foreground">Number provided — no file uploaded</p>
-                    ) : null}
+                      ) : doc.documentNumber ? (
+                        <p className="text-sm text-muted-foreground">Number provided — no file uploaded</p>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
