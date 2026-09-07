@@ -17,6 +17,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/sellers/users': 'Seller Users',
   '/sellers/stores': 'Seller Stores',
   '/sellers/approvals': 'Seller Approvals',
+  '/admin/users': 'Admin Users',
+  '/admin/invites': 'Invitations',
+  '/admin/settings': 'Settings',
 };
 
 function getPageTitle(pathname: string | null): string {

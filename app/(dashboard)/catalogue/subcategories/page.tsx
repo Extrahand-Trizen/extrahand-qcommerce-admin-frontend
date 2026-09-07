@@ -94,6 +94,7 @@ export default function SubcategoriesPage() {
           label: 'Subcategory image',
           type: 'imageUrl',
           fullWidth: true,
+          uploadPath: endpoints.subcategoryUpload,
           placeholder: 'https://example.com/subcategory.jpg',
           hint: 'Optional thumbnail shown in lists.',
         },

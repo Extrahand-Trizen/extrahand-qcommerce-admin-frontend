@@ -6,6 +6,7 @@ import { api, endpoints } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
+import { useAuth } from '@/lib/hooks/useAuth';
 import {
   Users,
   UserCheck,
@@ -107,6 +108,7 @@ const toneIconStyles = {
 };
 
 export default function DashboardPage() {
+  const { isSellerOpsAdmin, isCatalogueAdmin } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => {
@@ -115,12 +117,22 @@ export default function DashboardPage() {
     },
   });
 
+  const visibleActionStats = actionStats.filter((stat) => {
+    if (isSellerOpsAdmin) return stat.href.startsWith('/sellers');
+    if (isCatalogueAdmin) return !stat.href.startsWith('/sellers');
+    return true;
+  });
+
   return (
     <div className="flex min-h-[calc(100dvh-7rem)] flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Catalogue overview on the left, seller metrics on the right, activity below.
+          {isSellerOpsAdmin
+            ? 'Seller operations overview, applications, and activity below.'
+            : isCatalogueAdmin
+              ? 'Catalogue overview, product taxonomy, and submissions below.'
+              : 'Catalogue overview on the left, seller metrics on the right, activity below.'}
         </p>
       </div>
 
@@ -134,13 +146,15 @@ export default function DashboardPage() {
                   {data?.stats.totalCategories ?? 9} top-level categories
                 </p>
               </div>
-              <Link
-                href="/catalogue/categories"
-                className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline"
-              >
-                Manage
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
+              {!isSellerOpsAdmin && (
+                <Link
+                  href="/catalogue/categories"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline"
+                >
+                  Manage
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              )}
             </div>
 
             <div className="min-h-0 flex-1">
@@ -149,50 +163,71 @@ export default function DashboardPage() {
                   ? Array.from({ length: 9 }).map((_, i) => (
                       <Skeleton key={i} className="h-32 rounded-xl" />
                     ))
-                  : data?.categories.map((category) => (
-                      <Link
-                        key={category.id}
-                        href={`/products?categoryId=${category.id}`}
-                        className="group rounded-xl border border-border p-3 transition-all hover:border-amber-200 hover:shadow-sm"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                            {category.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={category.imageUrl}
-                                alt={category.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center bg-slate-200 text-sm font-semibold text-slate-500">
-                                {category.name.charAt(0)}
-                              </div>
+                  : data?.categories.map((category) => {
+                      const CardInner = (
+                        <>
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                              {category.imageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={category.imageUrl}
+                                  alt={category.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-slate-200 text-sm font-semibold text-slate-500">
+                                  {category.name.charAt(0)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
+                                {category.name}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {category.subcategoryCount} sub · {category.productCount} products
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-2 text-[11px] text-muted-foreground">
+                            <span>{category.activeProductCount} active</span>
+                            {!isSellerOpsAdmin && (
+                              <span className="font-medium text-amber-700 opacity-0 transition-opacity group-hover:opacity-100">
+                                View products
+                              </span>
                             )}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
-                              {category.name}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {category.subcategoryCount} sub · {category.productCount} products
-                            </p>
+                        </>
+                      );
+
+                      if (isSellerOpsAdmin) {
+                        return (
+                          <div
+                            key={category.id}
+                            className="rounded-xl border border-border p-3 bg-white"
+                          >
+                            {CardInner}
                           </div>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-2 text-[11px] text-muted-foreground">
-                          <span>{category.activeProductCount} active</span>
-                          <span className="font-medium text-amber-700 opacity-0 transition-opacity group-hover:opacity-100">
-                            View products
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
+                        );
+                      }
+
+                      return (
+                        <Link
+                          key={category.id}
+                          href={`/products?categoryId=${category.id}`}
+                          className="group rounded-xl border border-border p-3 transition-all hover:border-amber-200 hover:shadow-sm"
+                        >
+                          {CardInner}
+                        </Link>
+                      );
+                    })}
               </div>
             </div>
           </section>
 
           {!isLoading && data ? (
-            <CatalogueTags stats={data.stats} />
+            <CatalogueTags stats={data.stats} isSellerOpsAdmin={isSellerOpsAdmin} />
           ) : (
             <Skeleton className="h-6 w-full max-w-xl rounded-md" />
           )}
@@ -202,7 +237,7 @@ export default function DashboardPage() {
           <section className="rounded-xl border border-border bg-white p-4">
             <h2 className="mb-3 text-base font-semibold">Needs attention</h2>
             <div className="space-y-3">
-              {actionStats.map(({ key, label, description, icon: Icon, href, tone }) => (
+              {visibleActionStats.map(({ key, label, description, icon: Icon, href, tone }) => (
                 <Link
                   key={key}
                   href={href}
@@ -233,57 +268,119 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-border bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Seller overview</h2>
-              <Link href="/sellers/users" className="text-xs font-medium text-amber-700 hover:underline">
-                View all
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <SummaryTile
-                label="Total sellers"
-                value={data?.stats.totalSellers}
-                isLoading={isLoading}
-                icon={Users}
-              />
-              <SummaryTile
-                label="Approved sellers"
-                value={data?.stats.activeSellers}
-                isLoading={isLoading}
-                icon={UserCheck}
-              />
-            </div>
-          </section>
+          {!isCatalogueAdmin && (
+            <section className="rounded-xl border border-border bg-white p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-base font-semibold">Seller overview</h2>
+                <Link href="/sellers/users" className="text-xs font-medium text-amber-700 hover:underline">
+                  View all
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <SummaryTile
+                  label="Total sellers"
+                  value={data?.stats.totalSellers}
+                  isLoading={isLoading}
+                  icon={Users}
+                />
+                <SummaryTile
+                  label="Approved sellers"
+                  value={data?.stats.activeSellers}
+                  isLoading={isLoading}
+                  icon={UserCheck}
+                />
+              </div>
+            </section>
+          )}
         </aside>
       </div>
 
       <div className="grid min-h-0 flex-1 gap-6 md:grid-cols-2">
-        <ActivityCard
-          title="Pending seller approvals"
-          href="/sellers/approvals"
-          isLoading={isLoading}
-          items={data?.activity.pendingApprovals.map((s) => ({
-            primary: s.shopName,
-            secondary: s.fullName,
-            status: s.status,
-          }))}
-          empty="No pending approvals"
-          className="flex min-h-[260px] flex-col"
-        />
+        {isSellerOpsAdmin ? (
+          <>
+            <ActivityCard
+              title="Pending seller approvals"
+              href="/sellers/approvals"
+              isLoading={isLoading}
+              items={data?.activity.pendingApprovals.map((s) => ({
+                primary: s.shopName,
+                secondary: s.fullName,
+                status: s.status,
+              }))}
+              empty="No pending approvals"
+              className="flex min-h-[260px] flex-col"
+            />
 
-        <ActivityCard
-          title="Recent product submissions"
-          href="/product-submissions"
-          isLoading={isLoading}
-          items={data?.activity.recentSubmissions.map((s) => ({
-            primary: s.submittedProductName,
-            secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
-            status: s.status,
-          }))}
-          empty="No recent submissions"
-          className="flex min-h-[260px] flex-col"
-        />
+            <ActivityCard
+              title="Recent sellers"
+              href="/sellers/users"
+              isLoading={isLoading}
+              items={data?.activity.recentSellers.map((s) => ({
+                primary: s.fullName,
+                secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
+                status: s.status,
+              }))}
+              empty="No recent sellers"
+              className="flex min-h-[260px] flex-col"
+            />
+          </>
+        ) : isCatalogueAdmin ? (
+          <>
+            <ActivityCard
+              title="Recent products"
+              href="/products"
+              isLoading={isLoading}
+              items={data?.activity.recentProducts.map((p) => ({
+                primary: p.name,
+                secondary: format(new Date(p.createdAt), 'MMM d, yyyy'),
+                status: p.status,
+              }))}
+              empty="No recent products"
+              className="flex min-h-[260px] flex-col"
+            />
+
+            <ActivityCard
+              title="Recent product submissions"
+              href="/product-submissions"
+              isLoading={isLoading}
+              items={data?.activity.recentSubmissions.map((s) => ({
+                primary: s.submittedProductName,
+                secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
+                status: s.status,
+              }))}
+              empty="No recent submissions"
+              className="flex min-h-[260px] flex-col"
+            />
+          </>
+        ) : (
+          <>
+            <ActivityCard
+              title="Pending seller approvals"
+              href="/sellers/approvals"
+              isLoading={isLoading}
+              items={data?.activity.pendingApprovals.map((s) => ({
+                primary: s.shopName,
+                secondary: s.fullName,
+                status: s.status,
+              }))}
+              empty="No pending approvals"
+              className="flex min-h-[260px] flex-col"
+            />
+
+            <ActivityCard
+              title="Recent product submissions"
+              href="/product-submissions"
+              isLoading={isLoading}
+              items={data?.activity.recentSubmissions.map((s) => ({
+                primary: s.submittedProductName,
+                secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
+                status: s.status,
+              }))}
+              empty="No recent submissions"
+              className="flex min-h-[260px] flex-col"
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -291,8 +388,10 @@ export default function DashboardPage() {
 
 function CatalogueTags({
   stats,
+  isSellerOpsAdmin,
 }: {
   stats: DashboardData['stats'];
+  isSellerOpsAdmin?: boolean;
 }) {
   const tags = [
     { label: 'Subcategories', value: stats.totalSubcategories, href: '/catalogue/subcategories' },
@@ -303,12 +402,19 @@ function CatalogueTags({
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-sm text-muted-foreground">
       {tags.map((tag, index) => (
-        <span key={tag.href} className="inline-flex items-center gap-2">
+        <span key={tag.label} className="inline-flex items-center gap-2">
           {index > 0 ? <span aria-hidden className="text-border">·</span> : null}
-          <Link href={tag.href} className="transition-colors hover:text-foreground">
-            <span className="font-semibold tabular-nums text-foreground">{tag.value}</span>{' '}
-            {tag.label}
-          </Link>
+          {isSellerOpsAdmin ? (
+            <span>
+              <span className="font-semibold tabular-nums text-foreground">{tag.value}</span>{' '}
+              {tag.label}
+            </span>
+          ) : (
+            <Link href={tag.href} className="transition-colors hover:text-foreground">
+              <span className="font-semibold tabular-nums text-foreground">{tag.value}</span>{' '}
+              {tag.label}
+            </Link>
+          )}
         </span>
       ))}
     </div>

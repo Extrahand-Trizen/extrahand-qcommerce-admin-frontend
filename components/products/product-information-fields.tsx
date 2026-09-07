@@ -19,6 +19,8 @@ export type NutritionInformationFormState = {
 export type ProductInformationFormState = {
   ingredients: string;
   manufacturer: string;
+  healthBenefits: string;
+  specialFeatures: string;
   storageInformation: string;
   usageInstructions: string;
   allergens: string;
@@ -28,6 +30,8 @@ export type ProductInformationFormState = {
 export const EMPTY_PRODUCT_INFORMATION: ProductInformationFormState = {
   ingredients: '',
   manufacturer: '',
+  healthBenefits: '',
+  specialFeatures: '',
   storageInformation: '',
   usageInstructions: '',
   allergens: '',
@@ -55,6 +59,8 @@ export function productInformationFromApi(raw: unknown): ProductInformationFormS
   return {
     ingredients: String(src.ingredients || ''),
     manufacturer: String(src.manufacturer || ''),
+    healthBenefits: String(src.healthBenefits || ''),
+    specialFeatures: String(src.specialFeatures || ''),
     storageInformation: String(src.storageInformation || ''),
     usageInstructions: String(src.usageInstructions || ''),
     allergens: String(src.allergens || ''),
@@ -76,6 +82,8 @@ export function productInformationToPayload(state: ProductInformationFormState) 
   return {
     ingredients: state.ingredients,
     manufacturer: state.manufacturer,
+    healthBenefits: state.healthBenefits,
+    specialFeatures: state.specialFeatures,
     storageInformation: state.storageInformation,
     usageInstructions: state.usageInstructions,
     allergens: state.allergens,
@@ -140,6 +148,22 @@ export function ProductInformationFields({
             placeholder="e.g. Britannia Industries Ltd."
             value={value.manufacturer}
             onChange={(e) => setField('manufacturer', e.target.value)}
+          />
+        </FormField>
+        <FormField label="Health Benefits" hint="Key benefits or wellness information for customers.">
+          <Textarea
+            rows={2}
+            placeholder="e.g. High in fibre and a source of vitamin C."
+            value={value.healthBenefits}
+            onChange={(e) => setField('healthBenefits', e.target.value)}
+          />
+        </FormField>
+        <FormField label="Special Features" hint="Distinctive product features or certifications.">
+          <Textarea
+            rows={2}
+            placeholder="e.g. Organic, preservative-free, and ready to cook."
+            value={value.specialFeatures}
+            onChange={(e) => setField('specialFeatures', e.target.value)}
           />
         </FormField>
         <FormField label="Allergens" hint="Allergen warnings for customers.">
@@ -251,6 +275,8 @@ export function productInformationDisplayItems(raw: unknown): Array<[string, unk
   const items: Array<[string, unknown]> = [
     ['Ingredients', state.ingredients],
     ['Manufacturer', state.manufacturer],
+    ['Health Benefits', state.healthBenefits],
+    ['Special Features', state.specialFeatures],
     ['Storage Information', state.storageInformation],
     ['Usage Instructions', state.usageInstructions],
     ['Allergens', state.allergens],

@@ -36,6 +36,14 @@ export default function CategoriesPage() {
         },
         {
           section: 'Basic details',
+          name: 'code',
+          label: 'Code',
+          required: true,
+          placeholder: 'e.g. FRESH',
+          hint: '2–6 character uppercase SKU prefix for this category.',
+        },
+        {
+          section: 'Basic details',
           name: 'description',
           label: 'Description',
           type: 'textarea',
@@ -64,6 +72,7 @@ export default function CategoriesPage() {
           label: 'Category image',
           type: 'imageUrl',
           fullWidth: true,
+          uploadPath: endpoints.categoryUpload,
           placeholder: 'https://example.com/category.jpg',
           hint: 'Square thumbnail shown in lists and the dashboard.',
         },
