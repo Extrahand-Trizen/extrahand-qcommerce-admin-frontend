@@ -54,11 +54,7 @@ const sellersNav: NavItem[] = [
 ];
 
 const sellerOpsNav: NavItem[] = [
-  {
-    name: 'Products',
-    icon: Package,
-    children: [{ name: 'Product Submissions', href: '/product-submissions' }],
-  },
+  { name: 'Product Submissions', href: '/product-submissions', icon: Package },
 ];
 
 export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
