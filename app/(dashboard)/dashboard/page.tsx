@@ -138,98 +138,161 @@ export default function DashboardPage() {
 
       <div className="grid shrink-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-stretch">
         <div className="flex min-h-0 flex-col gap-3">
-          <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-white p-4 sm:p-5">
-            <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold">Catalogue categories</h2>
-                <p className="text-xs text-muted-foreground">
-                  {data?.stats.totalCategories ?? 9} top-level categories
-                </p>
-              </div>
-              {!isSellerOpsAdmin && (
-                <Link
-                  href="/catalogue/categories"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline"
-                >
-                  Manage
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              )}
-            </div>
+          {isSellerOpsAdmin ? (
+            <>
+              {/* Seller platform summary stats */}
+              <section className="rounded-xl border border-border bg-white p-4 sm:p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-semibold">Seller platform overview</h2>
+                    <p className="text-xs text-muted-foreground">Key seller metrics at a glance</p>
+                  </div>
+                  <Link href="/sellers/users" className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline">
+                    View all sellers
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {([
+                    { label: 'Total Sellers', key: 'totalSellers', icon: Users, color: 'bg-slate-100 text-slate-600' },
+                    { label: 'Active Sellers', key: 'activeSellers', icon: UserCheck, color: 'bg-emerald-100 text-emerald-700' },
+                    { label: 'Pending Approvals', key: 'pendingSellerApprovals', icon: Clock, color: 'bg-amber-100 text-amber-700' },
+                    { label: 'Pending Submissions', key: 'pendingProductSubmissions', icon: FileText, color: 'bg-orange-100 text-orange-700' },
+                  ] as { label: string; key: keyof DashboardData['stats']; icon: typeof Users; color: string }[]).map(({ label, key, icon: Icon, color }) => (
+                    <div key={key} className="rounded-lg border border-border bg-slate-50 px-3 py-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <div className={cn('flex h-6 w-6 items-center justify-center rounded-md', color)}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <span className="text-[11px] font-medium leading-tight">{label}</span>
+                      </div>
+                      {isLoading ? (
+                        <Skeleton className="mt-2 h-7 w-10" />
+                      ) : (
+                        <p className="mt-1 text-xl font-semibold tabular-nums">{data?.stats[key] ?? 0}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
 
-            <div className="min-h-0 flex-1">
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                {isLoading
-                  ? Array.from({ length: 9 }).map((_, i) => (
-                      <Skeleton key={i} className="h-32 rounded-xl" />
-                    ))
-                  : data?.categories.map((category) => {
-                      const CardInner = (
-                        <>
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                              {category.imageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={category.imageUrl}
-                                  alt={category.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center bg-slate-200 text-sm font-semibold text-slate-500">
-                                  {category.name.charAt(0)}
-                                </div>
-                              )}
+              {/* Recently approved sellers */}
+              <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-white p-4 sm:p-5">
+                <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold">Recently approved sellers</h2>
+                    <p className="text-xs text-muted-foreground">Sellers recently approved and live on platform</p>
+                  </div>
+                  <Link href="/sellers/stores" className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline">
+                    View stores
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+                <div className="min-h-0 flex-1">
+                  {isLoading ? (
+                    <div className="space-y-3">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                      ))}
+                    </div>
+                  ) : !data?.activity.recentApprovedSellers.length ? (
+                    <p className="py-10 text-center text-sm text-muted-foreground">No approved sellers yet</p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {data.activity.recentApprovedSellers.slice(0, 8).map((seller, i) => (
+                        <li key={i} className="flex items-center justify-between gap-3 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">
+                              {seller.fullName?.charAt(0)?.toUpperCase() ?? '?'}
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
-                                {category.name}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {category.subcategoryCount} sub · {category.productCount} products
+                            <div>
+                              <p className="text-sm font-medium">{seller.fullName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Approved {format(new Date(seller.updatedAt), 'MMM d, yyyy')}
                               </p>
                             </div>
                           </div>
-                          <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-2 text-[11px] text-muted-foreground">
-                            <span>{category.activeProductCount} active</span>
-                            {!isSellerOpsAdmin && (
+                          <StatusBadge status="APPROVED" />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-white p-4 sm:p-5">
+                <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold">Catalogue categories</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {data?.stats.totalCategories ?? 9} top-level categories
+                    </p>
+                  </div>
+                  <Link
+                    href="/catalogue/categories"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:underline"
+                  >
+                    Manage
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+
+                <div className="min-h-0 flex-1">
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                    {isLoading
+                      ? Array.from({ length: 9 }).map((_, i) => (
+                          <Skeleton key={i} className="h-32 rounded-xl" />
+                        ))
+                      : data?.categories.map((category) => (
+                          <Link
+                            key={category.id}
+                            href={`/products?categoryId=${category.id}`}
+                            className="group rounded-xl border border-border p-3 transition-all hover:border-amber-200 hover:shadow-sm"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                                {category.imageUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={category.imageUrl}
+                                    alt={category.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-slate-200 text-sm font-semibold text-slate-500">
+                                    {category.name.charAt(0)}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
+                                  {category.name}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {category.subcategoryCount} sub · {category.productCount} products
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-2 text-[11px] text-muted-foreground">
+                              <span>{category.activeProductCount} active</span>
                               <span className="font-medium text-amber-700 opacity-0 transition-opacity group-hover:opacity-100">
                                 View products
                               </span>
-                            )}
-                          </div>
-                        </>
-                      );
+                            </div>
+                          </Link>
+                        ))}
+                  </div>
+                </div>
+              </section>
 
-                      if (isSellerOpsAdmin) {
-                        return (
-                          <div
-                            key={category.id}
-                            className="rounded-xl border border-border p-3 bg-white"
-                          >
-                            {CardInner}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <Link
-                          key={category.id}
-                          href={`/products?categoryId=${category.id}`}
-                          className="group rounded-xl border border-border p-3 transition-all hover:border-amber-200 hover:shadow-sm"
-                        >
-                          {CardInner}
-                        </Link>
-                      );
-                    })}
-              </div>
-            </div>
-          </section>
-
-          {!isLoading && data ? (
-            <CatalogueTags stats={data.stats} isSellerOpsAdmin={isSellerOpsAdmin} />
-          ) : (
-            <Skeleton className="h-6 w-full max-w-xl rounded-md" />
+              {!isLoading && data ? (
+                <CatalogueTags stats={data.stats} isSellerOpsAdmin={false} />
+              ) : (
+                <Skeleton className="h-6 w-full max-w-xl rounded-md" />
+              )}
+            </>
           )}
         </div>
 
