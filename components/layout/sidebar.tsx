@@ -81,7 +81,7 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
     ? [...dashboardNav, ...sellersNav, ...sellerOpsNav]
     : isCatalogueAdmin
       ? [...dashboardNav, ...catalogueNav]
-      : [...dashboardNav, ...catalogueNav, ...sellersNav];
+      : [...dashboardNav, ...catalogueNav, ...sellersNav, ...sellerOpsNav];
 
   return (
     <>
