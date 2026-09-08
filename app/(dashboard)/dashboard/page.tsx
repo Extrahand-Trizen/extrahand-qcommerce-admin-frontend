@@ -118,7 +118,7 @@ export default function DashboardPage() {
   });
 
   const visibleActionStats = actionStats.filter((stat) => {
-    if (isSellerOpsAdmin) return stat.href.startsWith('/sellers');
+    if (isSellerOpsAdmin) return stat.href.startsWith('/sellers') || stat.href === '/product-submissions';
     if (isCatalogueAdmin) return !stat.href.startsWith('/sellers');
     return true;
   });
@@ -386,6 +386,19 @@ export default function DashboardPage() {
               empty="No recent sellers"
               className="flex min-h-[260px] flex-col"
             />
+
+            <ActivityCard
+              title="Recent product submissions"
+              href="/product-submissions"
+              isLoading={isLoading}
+              items={data?.activity.recentSubmissions.map((s) => ({
+                primary: s.submittedProductName,
+                secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
+                status: s.status,
+              }))}
+              empty="No recent submissions"
+              className="flex min-h-[260px] flex-col"
+            />
           </>
         ) : isCatalogueAdmin ? (
           <>
@@ -402,18 +415,6 @@ export default function DashboardPage() {
               className="flex min-h-[260px] flex-col"
             />
 
-            <ActivityCard
-              title="Recent product submissions"
-              href="/product-submissions"
-              isLoading={isLoading}
-              items={data?.activity.recentSubmissions.map((s) => ({
-                primary: s.submittedProductName,
-                secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
-                status: s.status,
-              }))}
-              empty="No recent submissions"
-              className="flex min-h-[260px] flex-col"
-            />
           </>
         ) : (
           <>
@@ -430,18 +431,6 @@ export default function DashboardPage() {
               className="flex min-h-[260px] flex-col"
             />
 
-            <ActivityCard
-              title="Recent product submissions"
-              href="/product-submissions"
-              isLoading={isLoading}
-              items={data?.activity.recentSubmissions.map((s) => ({
-                primary: s.submittedProductName,
-                secondary: format(new Date(s.createdAt), 'MMM d, yyyy'),
-                status: s.status,
-              }))}
-              empty="No recent submissions"
-              className="flex min-h-[260px] flex-col"
-            />
           </>
         )}
       </div>

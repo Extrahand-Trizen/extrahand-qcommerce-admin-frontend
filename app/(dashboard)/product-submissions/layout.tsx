@@ -10,7 +10,7 @@ export default function ProductSubmissionsLayout({ children }: { children: React
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && (!user || isSellerOpsAdmin)) {
+    if (!loading && (!user || !isSellerOpsAdmin)) {
       router.replace('/dashboard');
     }
   }, [user, loading, isSellerOpsAdmin, router]);
@@ -23,13 +23,13 @@ export default function ProductSubmissionsLayout({ children }: { children: React
     );
   }
 
-  if (isSellerOpsAdmin) {
+  if (!isSellerOpsAdmin) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center">
         <ShieldAlert className="h-12 w-12 text-red-500 mb-4" />
         <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Seller Operations Administrators do not have access to Product Submissions. Redirecting to dashboard...
+          Only Seller Operations Administrators have access to Product Submissions. Redirecting to dashboard...
         </p>
       </div>
     );

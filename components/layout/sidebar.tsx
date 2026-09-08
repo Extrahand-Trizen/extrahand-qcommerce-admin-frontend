@@ -54,6 +54,14 @@ const sellersNav: NavItem[] = [
   },
 ];
 
+const sellerOpsNav: NavItem[] = [
+  {
+    name: 'Products',
+    icon: Package,
+    children: [{ name: 'Product Submissions', href: '/product-submissions' }],
+  },
+];
+
 export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const { isSuperAdmin, isCatalogueAdmin, isSellerOpsAdmin } = useAuth();
@@ -71,7 +79,7 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
   }, [pathname]);
 
   const nav = isSellerOpsAdmin
-    ? [...dashboardNav, ...sellersNav]
+    ? [...dashboardNav, ...sellersNav, ...sellerOpsNav]
     : isCatalogueAdmin
       ? [...dashboardNav, ...catalogueNav]
       : [...dashboardNav, ...catalogueNav, ...sellersNav];
