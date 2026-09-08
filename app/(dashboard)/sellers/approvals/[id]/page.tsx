@@ -176,7 +176,7 @@ export default function SellerApprovalDetailPage() {
           );
         })()}
         <InfoCard title="Business Details" items={[
-          ['Business Type', o.businessType], ['PAN', o.pan], ['GSTIN', o.gstin], ['FSSAI', o.fssaiNumber],
+          ['PAN', o.pan], ['GSTIN', o.gstin], ['FSSAI', o.fssaiNumber],
         ]} />
       </div>
 
