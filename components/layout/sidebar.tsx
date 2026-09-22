@@ -38,6 +38,7 @@ const catalogueNav: NavItem[] = [
     children: [
       { name: 'Products', href: '/products' },
       { name: 'Product Submissions', href: '/product-submissions' },
+      { name: 'Price & Listing Reviews', href: '/price-reviews' },
     ],
   },
 ];

@@ -14,11 +14,13 @@ import { format } from 'date-fns';
 
 export default function ProductSubmissionsPage() {
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['submissions', search],
+    queryKey: ['submissions', activeTab, search],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: '50' });
+      const params = new URLSearchParams({ limit: '100' });
+      if (activeTab !== 'ALL') params.set('status', activeTab);
       if (search.trim()) params.set('search', search.trim());
       const res = await api<{ items: Record<string, unknown>[] }>(`${endpoints.productSubmissions}?${params}`);
       return res.data?.items || [];
@@ -32,6 +34,38 @@ export default function ProductSubmissionsPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Review seller product requests, complete missing catalogue data, and approve or reject.
         </p>
+      </div>
+
+      {/* Segmented Filter Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+        <Button
+          variant={activeTab === 'PENDING' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('PENDING')}
+        >
+          Pending Review
+        </Button>
+        <Button
+          variant={activeTab === 'APPROVED' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('APPROVED')}
+        >
+          Approved
+        </Button>
+        <Button
+          variant={activeTab === 'REJECTED' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('REJECTED')}
+        >
+          Rejected
+        </Button>
+        <Button
+          variant={activeTab === 'ALL' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('ALL')}
+        >
+          All Submissions
+        </Button>
       </div>
 
       <DataTableCard toolbar={<SearchInput value={search} onChange={setSearch} placeholder="Search submissions..." />}>
@@ -49,7 +83,7 @@ export default function ProductSubmissionsPage() {
             {isLoading ? (
               <TableLoadingRows cols={5} />
             ) : !data?.length ? (
-              <TableEmptyRow cols={5} message="No submissions" />
+              <TableEmptyRow cols={5} message={activeTab === 'PENDING' ? 'No pending product submissions' : 'No submissions found'} />
             ) : data.map((s) => (
               <TableRow key={String(s._id)}>
                 <TableCell className="font-medium">{String(s.submittedProductName)}</TableCell>

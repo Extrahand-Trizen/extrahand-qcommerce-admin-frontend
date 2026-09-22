@@ -1,3 +1,4 @@
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +13,20 @@ interface InfoCardProps {
 export function InfoCard({ title, items, action, footer, className }: InfoCardProps) {
   const visibleItems = items.filter(([, value]) => value != null && value !== '');
 
+  const renderValue = (val: unknown): React.ReactNode => {
+    if (val == null || val === '') return null;
+    if (React.isValidElement(val)) return val;
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (typeof val === 'object') {
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return String(val);
+      }
+    }
+    return String(val);
+  };
+
   return (
     <Card className={cn('shadow-sm', className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -25,7 +40,7 @@ export function InfoCard({ title, items, action, footer, className }: InfoCardPr
           visibleItems.map(([label, value]) => (
             <div key={label} className="flex items-start justify-between gap-4 text-sm border-b border-border/60 pb-3 last:border-0 last:pb-0">
               <span className="text-muted-foreground shrink-0">{label}</span>
-              <span className="font-medium text-right break-words max-w-[65%]">{String(value)}</span>
+              <span className="font-medium text-right break-words max-w-[65%]">{renderValue(value)}</span>
             </div>
           ))
         )}
