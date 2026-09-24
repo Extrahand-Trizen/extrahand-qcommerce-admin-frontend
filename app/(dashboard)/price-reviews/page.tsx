@@ -12,7 +12,7 @@ import { DataTableCard } from '@/components/shared/data-table-card';
 import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-states';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { toast } from 'sonner';
-import { Check, X, Package, ArrowRight, Store, MessageSquare } from 'lucide-react';
+import { Check, X, Package, ArrowRight, Store, MessageSquare, Eye, Tag, Info, Layers, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface SellerListing {
@@ -35,11 +35,26 @@ interface SellerListing {
     sellingPricePaise?: number;
     packOrSoldAs?: string;
     variant?: string;
+    attributes?: Array<{ label?: string; attributeId?: string; value: any }>;
+    description?: string;
+    productInformation?: Record<string, any>;
+    lifespanValue?: number;
+    lifespanUnit?: string;
   };
   unit?: string | null;
   sellingPricePaise: number;
+  customDescription?: string | null;
+  customNotes?: string | null;
+  customAttributes?: Array<{ attributeId?: string; label?: string; value: any }> | null;
+  customProductInformation?: Record<string, any> | null;
+
   pendingSellingPricePaise?: number | null;
   pendingUnit?: string | null;
+  pendingDescription?: string | null;
+  pendingNotes?: string | null;
+  pendingAttributes?: Array<{ attributeId?: string; label?: string; value: any }> | null;
+  pendingProductInformation?: Record<string, any> | null;
+
   rejectionReason?: string | null;
   reviewStatus: 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
   reviewSubmittedAt?: string | null;
@@ -57,6 +72,9 @@ export default function PriceReviewsPage() {
   // Modal state for rejection note prompt
   const [rejectModalItem, setRejectModalItem] = useState<SellerListing | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+
+  // Modal state for View Changes Diff
+  const [viewChangesItem, setViewChangesItem] = useState<SellerListing | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['price-reviews', activeTab, search, page],
@@ -80,7 +98,8 @@ export default function PriceReviewsPage() {
       return api(`${endpoints.sellerListings}/${id}/approve`, { method: 'POST' });
     },
     onSuccess: () => {
-      toast.success('Price & unit changes approved and published live!');
+      toast.success('Product changes approved and published live!');
+      setViewChangesItem(null);
       qc.invalidateQueries({ queryKey: ['price-reviews'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to approve changes'),
@@ -96,6 +115,7 @@ export default function PriceReviewsPage() {
     onSuccess: () => {
       toast.success('Request rejected and rejection note sent!');
       setRejectModalItem(null);
+      setViewChangesItem(null);
       setRejectionReasonInput('');
       qc.invalidateQueries({ queryKey: ['price-reviews'] });
     },
@@ -124,13 +144,43 @@ export default function PriceReviewsPage() {
   const showActionsColumn = activeTab === 'UNDER_REVIEW' || activeTab === 'ALL';
   const colsCount = showActionsColumn ? 7 : 6;
 
+  // Helper to compute attribute diffs
+  const getAttributeDiffs = (item: SellerListing) => {
+    const liveAttrs = item.customAttributes || item.masterProductId?.attributes || [];
+    const pendingAttrs = item.pendingAttributes || [];
+
+    const liveMap = new Map<string, string>();
+    liveAttrs.forEach((a) => {
+      const key = (a.label || a.attributeId || '').trim();
+      if (key) liveMap.set(key, String(a.value ?? '').trim());
+    });
+
+    const pendingMap = new Map<string, string>();
+    pendingAttrs.forEach((a) => {
+      const key = (a.label || a.attributeId || '').trim();
+      if (key) pendingMap.set(key, String(a.value ?? '').trim());
+    });
+
+    const allKeys = Array.from(new Set([...Array.from(liveMap.keys()), ...Array.from(pendingMap.keys())]));
+    return allKeys.map((key) => {
+      const liveVal = liveMap.get(key);
+      const pendingVal = pendingMap.get(key);
+      let status: 'Added' | 'Changed' | 'Removed' | 'Unchanged' = 'Unchanged';
+      if (liveVal === undefined && pendingVal !== undefined) status = 'Added';
+      else if (liveVal !== undefined && pendingVal === undefined) status = 'Removed';
+      else if (liveVal !== pendingVal) status = 'Changed';
+
+      return { key, liveVal: liveVal ?? '—', pendingVal: pendingVal ?? '—', status };
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Price & Unit Reviews</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Product Catalogue & Price Reviews</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Review seller price and unit updates (`UNDER_REVIEW`). Approve to publish live or reject with a note to seller. Past rejections remain saved in the Rejected tab.
+          Review seller updates to attributes, description, notes, price, and units (`UNDER_REVIEW`). Click <span className="font-semibold text-slate-800">View Changes</span> to compare before vs after and approve or reject.
         </p>
       </div>
 
@@ -180,7 +230,7 @@ export default function PriceReviewsPage() {
               <TableHead>Product</TableHead>
               <TableHead>Seller / Store</TableHead>
               <TableHead>Approved Live Details</TableHead>
-              <TableHead>Requested / Rejected Changes</TableHead>
+              <TableHead>Requested / Pending Changes</TableHead>
               <TableHead>Submitted Date</TableHead>
               <TableHead>Status</TableHead>
               {showActionsColumn && <TableHead className="text-right">Actions</TableHead>}
@@ -194,7 +244,7 @@ export default function PriceReviewsPage() {
                 cols={colsCount}
                 message={
                   activeTab === 'UNDER_REVIEW'
-                    ? 'No pending price or unit reviews found'
+                    ? 'No pending product content or price reviews found'
                     : activeTab === 'REJECTED'
                     ? 'No rejected history logs found'
                     : 'No listings match your search criteria'
@@ -212,6 +262,12 @@ export default function PriceReviewsPage() {
                 const isUnitChanged = requestedUnit != null && requestedUnit !== currentUnit;
                 const priceDiff = requestedPrice != null ? requestedPrice - currentPrice : 0;
                 const isUnderReview = item.reviewStatus === 'UNDER_REVIEW';
+
+                const hasPendingAttributes = Boolean(item.pendingAttributes && item.pendingAttributes.length > 0);
+                const hasPendingDesc = Boolean(item.pendingDescription);
+                const hasPendingNotes = Boolean(item.pendingNotes);
+                const hasPendingInfo = Boolean(item.pendingProductInformation && Object.keys(item.pendingProductInformation).length > 0);
+                const hasAnyPending = requestedPrice != null || isUnitChanged || hasPendingAttributes || hasPendingDesc || hasPendingNotes || hasPendingInfo;
 
                 const shopName = item.sellerId?.shopName || item.sellerId?.storeName || item.sellerId?.fullName || 'Seller';
                 const productName = item.masterProductId?.name || 'Product';
@@ -255,33 +311,40 @@ export default function PriceReviewsPage() {
                       </div>
                     </TableCell>
 
-                    {/* Requested Changes (Price & Unit & Rejection Note) */}
+                    {/* Requested Changes (Price, Unit, Attributes, Description, Notes) */}
                     <TableCell>
                       <div className="flex flex-col gap-1.5">
-                        {requestedPrice != null || isUnitChanged ? (
-                          <div className="flex flex-col gap-1">
+                        {hasAnyPending ? (
+                          <div className="flex flex-wrap gap-1">
                             {requestedPrice != null && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground">Price:</span>
-                                <span className="font-semibold text-amber-700">₹{requestedPrice.toFixed(2)}</span>
-                                {priceDiff !== 0 && (
-                                  <span
-                                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                                      priceDiff > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                                    }`}
-                                  >
-                                    {priceDiff > 0 ? `+₹${priceDiff.toFixed(2)}` : `-₹${Math.abs(priceDiff).toFixed(2)}`}
-                                  </span>
-                                )}
-                              </div>
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-900">
+                                Price: ₹{requestedPrice.toFixed(2)}
+                              </span>
                             )}
                             {isUnitChanged && (
-                              <div className="flex items-center gap-1 text-xs">
-                                <span className="text-muted-foreground">Unit:</span>
-                                <span className="font-medium text-slate-500 line-through">{currentUnit}</span>
-                                <ArrowRight className="h-3 w-3 text-amber-600" />
-                                <span className="font-bold text-amber-900">{requestedUnit}</span>
-                              </div>
+                              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-bold text-blue-900">
+                                Unit: {requestedUnit}
+                              </span>
+                            )}
+                            {hasPendingAttributes && (
+                              <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[11px] font-bold text-purple-900 flex items-center gap-1">
+                                <Tag className="h-3 w-3" /> Attributes Changed
+                              </span>
+                            )}
+                            {hasPendingDesc && (
+                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-900 flex items-center gap-1">
+                                <Info className="h-3 w-3" /> Description Changed
+                              </span>
+                            )}
+                            {hasPendingNotes && (
+                              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[11px] font-bold text-indigo-900 flex items-center gap-1">
+                                <MessageSquare className="h-3 w-3" /> Notes Changed
+                              </span>
+                            )}
+                            {hasPendingInfo && (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> Specs Changed
+                              </span>
                             )}
                           </div>
                         ) : (
@@ -317,35 +380,45 @@ export default function PriceReviewsPage() {
                     {/* Actions Cell */}
                     {showActionsColumn && (
                       <TableCell className="text-right">
-                        {isUnderReview ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                              onClick={() => approveMutation.mutate(item._id)}
-                              disabled={approveMutation.isPending || rejectMutation.isPending}
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 gap-1 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                              onClick={() => {
-                                setRejectModalItem(item);
-                                setRejectionReasonInput('');
-                              }}
-                              disabled={approveMutation.isPending || rejectMutation.isPending}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              Reject
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 gap-1 bg-slate-100 hover:bg-slate-200 text-slate-800"
+                            onClick={() => setViewChangesItem(item)}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View Changes
+                          </Button>
+
+                          {isUnderReview && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                onClick={() => approveMutation.mutate(item._id)}
+                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                                onClick={() => {
+                                  setRejectModalItem(item);
+                                  setRejectionReasonInput('');
+                                }}
+                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
@@ -366,6 +439,209 @@ export default function PriceReviewsPage() {
           </div>
         )}
       </DataTableCard>
+
+      {/* VIEW CHANGES COMPARISON MODAL */}
+      {viewChangesItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-2xl border border-border space-y-6 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b pb-4 border-border">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-bold text-slate-900">{viewChangesItem.masterProductId?.name}</h3>
+                  <StatusBadge status={viewChangesItem.reviewStatus} />
+                </div>
+                <p className="text-sm text-slate-500 mt-1">
+                  Store: <span className="font-semibold text-slate-800">{viewChangesItem.sellerId?.shopName || viewChangesItem.sellerId?.storeName || 'Seller Store'}</span> · Submitted: {viewChangesItem.reviewSubmittedAt ? format(new Date(viewChangesItem.reviewSubmittedAt), 'MMM d, yyyy h:mm a') : '—'}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewChangesItem(null)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Price & Unit Diff */}
+            {(viewChangesItem.pendingSellingPricePaise != null || (viewChangesItem.pendingUnit && viewChangesItem.pendingUnit !== viewChangesItem.unit)) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-amber-700" /> Price & Pack Unit Change
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-xs text-slate-500 block">Existing Approved</span>
+                    <span className="font-semibold text-slate-900">
+                      ₹{viewChangesItem.sellingPricePaise ? (viewChangesItem.sellingPricePaise / 100).toFixed(2) : '0.00'}
+                    </span>
+                    <span className="text-xs text-slate-500 ml-2">({viewChangesItem.unit || 'Standard'})</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">Seller Changed To</span>
+                    <span className="font-bold text-amber-800">
+                      ₹{viewChangesItem.pendingSellingPricePaise != null ? (viewChangesItem.pendingSellingPricePaise / 100).toFixed(2) : (viewChangesItem.sellingPricePaise / 100).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-amber-800 font-bold ml-2">({viewChangesItem.pendingUnit || viewChangesItem.unit || 'Standard'})</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Attribute Comparison View */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Tag className="h-4 w-4 text-purple-600" /> Product Attributes Comparison
+              </h4>
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-border text-slate-600 uppercase font-bold">
+                    <tr>
+                      <th className="p-2.5">Attribute Name</th>
+                      <th className="p-2.5">Previous Approved Value</th>
+                      <th className="p-2.5">Seller Changed To</th>
+                      <th className="p-2.5 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {getAttributeDiffs(viewChangesItem).length > 0 ? (
+                      getAttributeDiffs(viewChangesItem).map((diff, idx) => (
+                        <tr key={diff.key + idx} className={diff.status !== 'Unchanged' ? 'bg-amber-50/40 font-medium' : ''}>
+                          <td className="p-2.5 font-bold text-slate-800">{diff.key}</td>
+                          <td className="p-2.5 text-slate-600 line-through">{diff.liveVal}</td>
+                          <td className="p-2.5 font-bold text-slate-900">{diff.pendingVal}</td>
+                          <td className="p-2.5 text-right">
+                            <span
+                              className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                                diff.status === 'Changed'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : diff.status === 'Added'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : diff.status === 'Removed'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {diff.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="p-3 text-center text-slate-400 italic">
+                          No product attributes defined.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Product Description Diff */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Info className="h-4 w-4 text-emerald-600" /> Product Description Comparison
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Description</span>
+                  <p className="text-xs text-slate-700 whitespace-pre-wrap">
+                    {viewChangesItem.customDescription || viewChangesItem.masterProductId?.description || 'No description provided'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <span className="text-xs font-bold text-amber-900 uppercase block mb-1">Seller Changed To</span>
+                  <p className="text-xs text-amber-950 font-medium whitespace-pre-wrap">
+                    {viewChangesItem.pendingDescription ?? (viewChangesItem.customDescription || viewChangesItem.masterProductId?.description || 'No change')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Seller Notes Diff */}
+            {(viewChangesItem.pendingNotes || viewChangesItem.customNotes) && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4 text-indigo-600" /> Seller Notes Comparison
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Notes</span>
+                    <p className="text-xs text-slate-700 whitespace-pre-wrap">
+                      {viewChangesItem.customNotes || 'None'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
+                    <span className="text-xs font-bold text-indigo-900 uppercase block mb-1">Seller Changed To</span>
+                    <p className="text-xs text-indigo-950 font-medium whitespace-pre-wrap">
+                      {viewChangesItem.pendingNotes ?? viewChangesItem.customNotes ?? 'No change'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Specifications & Product Information */}
+            {viewChangesItem.pendingProductInformation && Object.keys(viewChangesItem.pendingProductInformation).length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-amber-600" /> Specifications & Product Information
+                </h4>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs space-y-1.5">
+                  {Object.entries(viewChangesItem.pendingProductInformation).map(([k, v]) => (
+                    <div key={k} className="flex items-center justify-between border-b border-amber-100 pb-1">
+                      <span className="font-semibold text-slate-700 capitalize">{k.replace(/([A-Z])/g, ' $1')}:</span>
+                      <span className="font-bold text-slate-900">{String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewChangesItem(null)}
+              >
+                Close
+              </Button>
+
+              {viewChangesItem.reviewStatus === 'UNDER_REVIEW' && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 gap-1"
+                    onClick={() => {
+                      setRejectModalItem(viewChangesItem);
+                      setRejectionReasonInput('');
+                    }}
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                  >
+                    <X className="h-4 w-4" />
+                    Reject Changes
+                  </Button>
+
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                    onClick={() => approveMutation.mutate(viewChangesItem._id)}
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                  >
+                    <Check className="h-4 w-4" />
+                    {approveMutation.isPending ? 'Approving...' : 'Approve & Publish Live'}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rejection Note Modal Dialog */}
       {rejectModalItem && (
@@ -397,7 +673,7 @@ export default function PriceReviewsPage() {
               <textarea
                 className="w-full rounded-md border border-slate-300 p-3 text-sm text-slate-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 rows={3}
-                placeholder="Enter rejection reason (e.g. Price too low compared to MRP / Invalid pack size format)..."
+                placeholder="Enter rejection reason (e.g. Invalid attribute values / Description violates store policies)..."
                 value={rejectionReasonInput}
                 onChange={(e) => setRejectionReasonInput(e.target.value)}
               />

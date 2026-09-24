@@ -190,6 +190,11 @@ export function SubmissionReviewForm({
       : [];
     const urls = [photoUrl, ...extraImages].filter(Boolean);
     setImages(urls.map((url, i) => ({ imageUrl: url, isPrimary: i === 0 })));
+    setProductInformation((prev) => ({
+      ...prev,
+      manufacturer: String(submission.manufacturerName || prev.manufacturer || ''),
+      manufacturerAddress: String(submission.manufacturerAddress || prev.manufacturerAddress || ''),
+    }));
   }, [submission]);
 
   const missingRequiredAttrs = useMemo(() => {
@@ -290,6 +295,8 @@ export function SubmissionReviewForm({
               ['Product Name', submission.submittedProductName],
               ['Category', refName(submission.categoryId)],
               ['Brand', submission.brand],
+              ['Manufacturer Company', submission.manufacturerName],
+              ['Manufacturer Address', submission.manufacturerAddress],
               ['Pack / Sold As', submission.packOrSoldAs],
               ['Selling Price', formatPaise(submission.sellingPricePaise as number | undefined)],
               ['Requested Stock', submission.quantity != null ? String(submission.quantity) : '—'],
@@ -354,6 +361,8 @@ export function SubmissionReviewForm({
             ['Product Name', submission.submittedProductName],
             ['Category', refName(submission.categoryId)],
             ['Brand', submission.brand || '—'],
+            ['Manufacturer Company', submission.manufacturerName || '—'],
+            ['Manufacturer Address', submission.manufacturerAddress || '—'],
             ['Pack / Sold As', submission.packOrSoldAs || '—'],
             ['Selling Price', formatPaise(submission.sellingPricePaise as number | undefined)],
             ['Requested Stock', submission.quantity != null ? String(submission.quantity) : '—'],

@@ -19,6 +19,7 @@ export type NutritionInformationFormState = {
 export type ProductInformationFormState = {
   ingredients: string;
   manufacturer: string;
+  manufacturerAddress: string;
   healthBenefits: string;
   specialFeatures: string;
   storageInformation: string;
@@ -30,6 +31,7 @@ export type ProductInformationFormState = {
 export const EMPTY_PRODUCT_INFORMATION: ProductInformationFormState = {
   ingredients: '',
   manufacturer: '',
+  manufacturerAddress: '',
   healthBenefits: '',
   specialFeatures: '',
   storageInformation: '',
@@ -59,6 +61,7 @@ export function productInformationFromApi(raw: unknown): ProductInformationFormS
   return {
     ingredients: String(src.ingredients || ''),
     manufacturer: String(src.manufacturer || ''),
+    manufacturerAddress: String(src.manufacturerAddress || ''),
     healthBenefits: String(src.healthBenefits || ''),
     specialFeatures: String(src.specialFeatures || ''),
     storageInformation: String(src.storageInformation || ''),
@@ -82,6 +85,7 @@ export function productInformationToPayload(state: ProductInformationFormState) 
   return {
     ingredients: state.ingredients,
     manufacturer: state.manufacturer,
+    manufacturerAddress: state.manufacturerAddress,
     healthBenefits: state.healthBenefits,
     specialFeatures: state.specialFeatures,
     storageInformation: state.storageInformation,
@@ -148,6 +152,13 @@ export function ProductInformationFields({
             placeholder="e.g. Britannia Industries Ltd."
             value={value.manufacturer}
             onChange={(e) => setField('manufacturer', e.target.value)}
+          />
+        </FormField>
+        <FormField label="Manufacturer Address" hint="Registered address of the manufacturing company.">
+          <Input
+            placeholder="e.g. Plot 12, Industrial Area, Mumbai"
+            value={value.manufacturerAddress}
+            onChange={(e) => setField('manufacturerAddress', e.target.value)}
           />
         </FormField>
         <FormField label="Health Benefits" hint="Key benefits or wellness information for customers.">
