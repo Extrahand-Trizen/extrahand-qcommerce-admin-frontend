@@ -73,6 +73,8 @@ export default function ProductSubmissionsPage() {
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Product Name</TableHead>
+              <TableHead>Pack / Net</TableHead>
+              <TableHead>Lifespan</TableHead>
               <TableHead>Seller</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Submitted</TableHead>
@@ -81,12 +83,18 @@ export default function ProductSubmissionsPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableLoadingRows cols={5} />
+              <TableLoadingRows cols={7} />
             ) : !data?.length ? (
-              <TableEmptyRow cols={5} message={activeTab === 'PENDING' ? 'No pending product submissions' : 'No submissions found'} />
+              <TableEmptyRow cols={7} message={activeTab === 'PENDING' ? 'No pending product submissions' : 'No submissions found'} />
             ) : data.map((s) => (
               <TableRow key={String(s._id)}>
                 <TableCell className="font-medium">{String(s.submittedProductName)}</TableCell>
+                <TableCell className="text-slate-700">{String(s.packOrSoldAs || '—')}</TableCell>
+                <TableCell className="text-slate-700 font-medium">
+                  {s.lifespanValue != null
+                    ? `${s.lifespanValue} ${s.lifespanUnit || 'Days'}`
+                    : '—'}
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {(s.sellerId as { fullName?: string; shopName?: string })?.shopName ||
                     (s.sellerId as { fullName?: string })?.fullName ||

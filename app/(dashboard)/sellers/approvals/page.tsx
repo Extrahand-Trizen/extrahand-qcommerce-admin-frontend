@@ -11,6 +11,7 @@ import { SearchInput } from '@/components/shared/search-input';
 import { DataTableCard } from '@/components/shared/data-table-card';
 import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-states';
 import { format } from 'date-fns';
+import { getCategoryLabel } from '@/lib/seller-onboarding';
 
 export default function SellerApprovalsPage() {
   const [search, setSearch] = useState('');
@@ -33,7 +34,7 @@ export default function SellerApprovalsPage() {
             <TableRow className="hover:bg-transparent">
               <TableHead>Seller Name</TableHead>
               <TableHead>Shop Name</TableHead>
-              <TableHead>Shop Type</TableHead>
+              <TableHead>Category</TableHead>
               <TableHead>City</TableHead>
               <TableHead>Submitted</TableHead>
               <TableHead>Status</TableHead>
@@ -48,11 +49,12 @@ export default function SellerApprovalsPage() {
             ) : data.map((item) => {
               const seller = item.sellerId as { _id?: string; fullName?: string; mobileNumber?: string } | string;
               const sellerId = typeof seller === 'object' ? seller._id : seller;
+              const categoryStr = (item.category || item.shopType) as string | undefined;
               return (
                 <TableRow key={String(item._id)}>
                   <TableCell className="font-medium">{String(item.fullName)}</TableCell>
                   <TableCell>{String(item.shopName)}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.shopType ? String(item.shopType) : '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{categoryStr ? getCategoryLabel(categoryStr) : '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{String(item.city)}</TableCell>
                   <TableCell className="text-muted-foreground">{item.submittedAt ? format(new Date(String(item.submittedAt)), 'MMM d, yyyy') : '—'}</TableCell>
                   <TableCell><StatusBadge status={String(item.status)} /></TableCell>

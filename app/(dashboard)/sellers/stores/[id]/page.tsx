@@ -16,7 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { StoreLocationMapDialog } from '@/components/sellers/store-location-map-dialog';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, MapPin } from 'lucide-react';
+import { ArrowLeft, MapPin, FileText, Clock, ShieldCheck, CreditCard, Eye, EyeOff, ExternalLink, AlertTriangle } from 'lucide-react';
+import { getCategoryLabel, maskAccountNumber, maskAadhaar } from '@/lib/seller-onboarding';
 
 type StoreCategory = {
   id: string;
@@ -53,6 +54,8 @@ export default function SellerStoreDetailPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [mapOpen, setMapOpen] = useState(false);
+  const [showFullAadhaar, setShowFullAadhaar] = useState(false);
+  const [showFullBankAcc, setShowFullBankAcc] = useState(false);
 
   const { data: storeDetail, isLoading: detailLoading } = useQuery({
     queryKey: ['seller-detail', id],
@@ -60,6 +63,7 @@ export default function SellerStoreDetailPage() {
       const res = await api<{
         seller: Record<string, unknown>;
         onboarding: Record<string, unknown> | null;
+        documents?: Array<Record<string, unknown>>;
       }>(`${endpoints.sellers}/${id}`);
       return res.data!;
     },
@@ -131,6 +135,18 @@ export default function SellerStoreDetailPage() {
 
   const seller = storeDetail.seller;
   const onboarding = storeDetail.onboarding;
+  const documents = (storeDetail.documents || []) as Array<Record<string, unknown>>;
+  const aadhaarDoc = documents.find((d) =>
+    ['AADHAAR_CARD', 'AADHAAR', 'AADHAR_CARD', 'AADHAR', 'AADHAAR_DOCUMENT', 'KYC_DOCUMENT'].includes(
+      String(d.documentType || '').toUpperCase().replace(/[- ]/g, '_'),
+    ),
+  );
+  const aadhaarFileUrl =
+    (aadhaarDoc?.fileUrl as string) ||
+    (onboarding.aadhaarCardUrl as string) ||
+    (onboarding.aadhaarDocumentUri && !String(onboarding.aadhaarDocumentUri).startsWith('file://')
+      ? String(onboarding.aadhaarDocumentUri)
+      : null);
 
   return (
     <div className="space-y-6">
@@ -150,7 +166,15 @@ export default function SellerStoreDetailPage() {
               {onboarding.state ? `, ${String(onboarding.state)}` : ''}
             </p>
           </div>
-          <StatusBadge status={String(seller.status)} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="gap-1.5 border-amber-300 bg-amber-50/60 font-medium text-amber-900 hover:bg-amber-100">
+              <Link href={`/sellers/approvals/${id}`}>
+                <FileText className="h-4 w-4 text-amber-600" />
+                View Onboarding & Documents
+              </Link>
+            </Button>
+            <StatusBadge status={String(seller.status)} />
+          </div>
         </div>
       </div>
 
@@ -159,10 +183,24 @@ export default function SellerStoreDetailPage() {
           title="Store Details"
           items={[
             ['Shop Name', onboarding.shopName],
-            ['Shop Type', onboarding.shopType],
+            ['Category', getCategoryLabel(String(onboarding.category || onboarding.shopType || ''))],
+            [
+              'Subcategories',
+              Array.isArray(onboarding.subcategories) && onboarding.subcategories.length
+                ? (onboarding.subcategories as string[]).join(', ')
+                : (onboarding.subcategory as string) || '—',
+            ],
             ['Description', onboarding.shopDescription],
             ['Shop Mobile', onboarding.shopMobileNumber],
             ['Shop Email', onboarding.shopEmail],
+            [
+              'Operating Timings',
+              onboarding.openingHours
+                ? typeof onboarding.openingHours === 'string'
+                  ? onboarding.openingHours
+                  : `${(onboarding.openingHours as any).open || ''} - ${(onboarding.openingHours as any).close || ''} (${((onboarding.openingHours as any).days || []).join(', ')})`
+                : '—',
+            ],
           ]}
         />
         {(() => {
@@ -181,7 +219,8 @@ export default function SellerStoreDetailPage() {
                   ['Mobile', onboarding.mobileNumber],
                   ['Email', onboarding.email],
                   ['Address', onboarding.address],
-                  ['Area', onboarding.area],
+                  ['Street / Road', onboarding.streetRoad || '—'],
+                  ['Area / Landmark', onboarding.area || '—'],
                   ['City', onboarding.city],
                   ['State', onboarding.state],
                   ['Pincode', onboarding.pincode],
@@ -218,6 +257,141 @@ export default function SellerStoreDetailPage() {
                 />
               ) : null}
             </>
+          );
+        })()}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <InfoCard
+          title="KYC & Identity Verification"
+          items={[
+            [
+              'Aadhaar Number *',
+              <div className="flex items-center gap-2" key="aadhaar-val">
+                <span className="font-mono text-sm">
+                  {onboarding.aadhaarNumber
+                    ? (showFullAadhaar ? String(onboarding.aadhaarNumber) : maskAadhaar(String(onboarding.aadhaarNumber)))
+                    : '—'}
+                </span>
+                {onboarding.aadhaarNumber ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullAadhaar(!showFullAadhaar)}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                    title={showFullAadhaar ? 'Hide Aadhaar' : 'Show Aadhaar'}
+                  >
+                    {showFullAadhaar ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                ) : null}
+              </div>,
+            ],
+            [
+              'Aadhaar Status',
+              onboarding.aadhaarVerificationStatus ? (
+                <StatusBadge status={String(onboarding.aadhaarVerificationStatus)} />
+              ) : (
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200">
+                  PENDING
+                </span>
+              ),
+            ],
+            [
+              'Aadhaar Document',
+              aadhaarFileUrl ? (
+                <a
+                  key="aadhaar-doc-link"
+                  href={aadhaarFileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View Uploaded Card ({String(aadhaarDoc?.verificationStatus || 'PENDING')})
+                </a>
+              ) : (
+                <span className="text-xs text-muted-foreground italic">No document image attached</span>
+              ),
+            ],
+            ['PAN Number', (onboarding.pan as string) || (onboarding.panNumber as string) || '—'],
+            ['PAN Status', onboarding.panVerificationStatus ? <StatusBadge status={String(onboarding.panVerificationStatus)} /> : '—'],
+            ['PAN Holder Name', (onboarding.panVerifiedName as string) || (onboarding.panHolderName as string) || '—'],
+            ['GSTIN', (onboarding.gstin as string) || (onboarding.gstinNumber as string) || '—'],
+            ['GST Legal Name', (onboarding.gstinVerifiedLegalName as string) || (onboarding.gstLegalName as string) || '—'],
+          ]}
+          action={
+            <Button asChild variant="ghost" size="sm" className="h-8 text-xs text-amber-700 hover:text-amber-800">
+              <Link href={`/sellers/approvals/${id}`}>
+                View Licences & Documents &rarr;
+              </Link>
+            </Button>
+          }
+        />
+        {(() => {
+          const rawBank = onboarding.bankAccount as Record<string, unknown> | undefined;
+          const storeBank = (seller as any)?.storeSettings?.bankAccount as Record<string, unknown> | undefined;
+          const bank = rawBank?.accountNumber ? rawBank : (storeBank?.accountNumber ? storeBank : rawBank || storeBank);
+          const hasBank = !!(bank?.accountNumber || bank?.ifscCode);
+          const passbookUrl = (bank?.passbookProofUrl || bank?.bankStatementUrl || bank?.cancelledChequeUrl) as string | undefined;
+
+          return (
+            <InfoCard
+              title="Bank & Settlement Account"
+              items={
+                hasBank
+                  ? [
+                      ['Account Holder', bank?.accountHolderName || onboarding.fullName || '—'],
+                      ['Bank Name', bank?.bankName || '—'],
+                      [
+                        'Account Number',
+                        <div className="flex items-center gap-2" key="acc-num">
+                          <span className="font-mono text-sm">
+                            {bank?.accountNumber
+                              ? (showFullBankAcc ? String(bank.accountNumber) : maskAccountNumber(String(bank.accountNumber)))
+                              : '—'}
+                          </span>
+                          {bank?.accountNumber ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowFullBankAcc(!showFullBankAcc)}
+                              className="text-muted-foreground transition-colors hover:text-foreground"
+                              title={showFullBankAcc ? 'Hide Account' : 'Show Account'}
+                            >
+                              {showFullBankAcc ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                          ) : null}
+                        </div>,
+                      ],
+                      ['IFSC Code', bank?.ifscCode ? <span className="font-mono font-medium">{String(bank.ifscCode).toUpperCase()}</span> : '—'],
+                      ['Verification Status', bank?.verificationStatus ? <StatusBadge status={String(bank.verificationStatus)} /> : <StatusBadge status="verified" />],
+                      ...(passbookUrl
+                        ? ([
+                            [
+                              'Passbook / Cheque',
+                              <a
+                                key="passbook-link"
+                                href={passbookUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                View Document Proof
+                              </a>,
+                            ],
+                          ] as Array<[string, unknown]>)
+                        : []),
+                    ]
+                  : [
+                      [
+                        'Settlement Account',
+                        <div key="bank-empty" className="flex items-center gap-2 text-xs text-amber-800">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                          <span>No bank account recorded for this store yet.</span>
+                        </div>,
+                      ],
+                    ]
+              }
+            />
           );
         })()}
       </div>

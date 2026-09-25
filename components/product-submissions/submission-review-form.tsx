@@ -183,6 +183,23 @@ export function SubmissionReviewForm({
     [typeAttributes],
   );
 
+  const requestedAttributesList: Array<[string, string]> = useMemo(() => {
+    if (!Array.isArray(submission.requestedAttributes) || submission.requestedAttributes.length === 0) {
+      return [];
+    }
+    return (submission.requestedAttributes as Array<{
+      attributeId: { _id?: string; name?: string; unit?: string } | string;
+      value: unknown;
+    }>).map((a) => {
+      const name =
+        typeof a.attributeId === 'object' && a.attributeId?.name
+          ? a.attributeId.name
+          : 'Specification';
+      const valStr = Array.isArray(a.value) ? a.value.join(', ') : String(a.value ?? '');
+      return [name, valStr];
+    });
+  }, [submission.requestedAttributes]);
+
   useEffect(() => {
     const photoUrl = submission.photoUrl ? String(submission.photoUrl) : '';
     const extraImages = Array.isArray(submission.images)
@@ -195,6 +212,43 @@ export function SubmissionReviewForm({
       manufacturer: String(submission.manufacturerName || prev.manufacturer || ''),
       manufacturerAddress: String(submission.manufacturerAddress || prev.manufacturerAddress || ''),
     }));
+
+    setForm((prev) => ({
+      ...prev,
+      name: String(submission.submittedProductName || prev.name || ''),
+      brand: String(submission.brand || prev.brand || ''),
+      description: String(submission.description || prev.description || ''),
+      sellingPrice:
+        submission.sellingPricePaise != null
+          ? String(Number(submission.sellingPricePaise) / 100)
+          : prev.sellingPrice,
+      quantity: submission.quantity != null ? String(submission.quantity) : prev.quantity,
+      lifespanValue:
+        submission.lifespanValue != null ? String(submission.lifespanValue) : prev.lifespanValue,
+      lifespanUnit: String(submission.lifespanUnit || prev.lifespanUnit || 'Days'),
+    }));
+
+    if (submission.subcategoryId) setSubcategoryId(refId(submission.subcategoryId));
+    if (submission.productTypeId) setProductTypeId(refId(submission.productTypeId));
+
+    if (Array.isArray(submission.requestedAttributes) && submission.requestedAttributes.length > 0) {
+      setAttributes((prev) => {
+        const next = { ...prev };
+        (submission.requestedAttributes as Array<{
+          attributeId: { _id?: string } | string;
+          value: unknown;
+        }>).forEach((attr) => {
+          const attrId =
+            typeof attr.attributeId === 'object' && attr.attributeId?._id
+              ? String(attr.attributeId._id)
+              : String(attr.attributeId || '');
+          if (attrId && attr.value !== undefined && attr.value !== null) {
+            next[attrId] = String(attr.value);
+          }
+        });
+        return next;
+      });
+    }
   }, [submission]);
 
   const missingRequiredAttrs = useMemo(() => {
@@ -313,6 +367,12 @@ export function SubmissionReviewForm({
             ]}
           />
         </div>
+        {requestedAttributesList.length > 0 ? (
+          <InfoCard
+            title="Seller Submitted Specifications (Net, Units & Details)"
+            items={requestedAttributesList}
+          />
+        ) : null}
         {submission.frontImageUrl || submission.photoUrl || submission.ingredientsImageUrl ? (
           <div className="grid gap-4 sm:grid-cols-2">
             {submission.frontImageUrl || submission.photoUrl ? (
@@ -370,41 +430,48 @@ export function SubmissionReviewForm({
             ['Description', submission.description || '—'],
           ]}
         />
-        {submission.frontImageUrl || submission.photoUrl || submission.ingredientsImageUrl ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {submission.frontImageUrl || submission.photoUrl ? (
-              <Card className="shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">Front / Packaging Photo</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={String(submission.frontImageUrl || submission.photoUrl)}
-                    alt="Front packaging"
-                    className="max-h-44 rounded-lg border object-cover"
-                  />
-                </CardContent>
-              </Card>
-            ) : null}
-            {submission.ingredientsImageUrl ? (
-              <Card className="shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">Ingredients Photo</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={String(submission.ingredientsImageUrl)}
-                    alt="Ingredients label"
-                    className="max-h-44 rounded-lg border object-cover"
-                  />
-                </CardContent>
-              </Card>
-            ) : null}
-          </div>
+        {requestedAttributesList.length > 0 ? (
+          <InfoCard
+            title="Submitted Specifications (Net, Units & Details)"
+            items={requestedAttributesList}
+          />
         ) : null}
       </div>
+
+      {submission.frontImageUrl || submission.photoUrl || submission.ingredientsImageUrl ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {submission.frontImageUrl || submission.photoUrl ? (
+            <Card className="shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Front / Packaging Photo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={String(submission.frontImageUrl || submission.photoUrl)}
+                  alt="Front packaging"
+                  className="max-h-44 rounded-lg border object-cover"
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+          {submission.ingredientsImageUrl ? (
+            <Card className="shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Ingredients Photo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={String(submission.ingredientsImageUrl)}
+                  alt="Ingredients label"
+                  className="max-h-44 rounded-lg border object-cover"
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
 
       <FormSection
         title="How to approve"

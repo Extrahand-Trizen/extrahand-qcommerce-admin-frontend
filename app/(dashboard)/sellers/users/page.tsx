@@ -14,6 +14,7 @@ import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { getCategoryLabel } from '@/lib/seller-onboarding';
 
 type SellerRow = {
   _id: string;
@@ -22,7 +23,7 @@ type SellerRow = {
   status: string;
   onboardingStatus: string;
   createdAt?: string;
-  onboarding?: { shopName?: string; shopType?: string } | null;
+  onboarding?: { shopName?: string; shopType?: string; category?: string } | null;
 };
 
 export default function SellerUsersPage() {
@@ -108,13 +109,25 @@ export default function SellerUsersPage() {
               return (
                 <TableRow key={String(s._id)}>
                   <TableCell className="font-medium">{String(s.fullName)}</TableCell>
-                  <TableCell className="text-muted-foreground">{onboarding?.shopName || '—'}</TableCell>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium text-foreground">{onboarding?.shopName || '—'}</p>
+                      {onboarding?.category || onboarding?.shopType ? (
+                        <p className="text-xs text-muted-foreground">
+                          {getCategoryLabel(String(onboarding.category || onboarding.shopType))}
+                        </p>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{String(s.mobileNumber)}</TableCell>
                   <TableCell><StatusBadge status={String(s.status)} /></TableCell>
                   <TableCell><StatusBadge status={String(s.onboardingStatus)} /></TableCell>
                   <TableCell className="text-muted-foreground">{s.createdAt ? format(new Date(String(s.createdAt)), 'MMM d, yyyy') : '—'}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
+                      <Button asChild size="sm" variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-50">
+                        <Link href={`/sellers/approvals/${String(s._id)}`}>Onboarding</Link>
+                      </Button>
                       {s.onboardingStatus === 'APPROVED' ? (
                         <Button asChild size="sm" variant="outline">
                           <Link href={`/sellers/stores/${String(s._id)}`}>View store</Link>
