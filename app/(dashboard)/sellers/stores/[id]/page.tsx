@@ -331,7 +331,7 @@ export default function SellerStoreDetailPage() {
           const storeBank = (seller as any)?.storeSettings?.bankAccount as Record<string, unknown> | undefined;
           const bank = rawBank?.accountNumber ? rawBank : (storeBank?.accountNumber ? storeBank : rawBank || storeBank);
           const hasBank = !!(bank?.accountNumber || bank?.ifscCode);
-          const passbookUrl = (bank?.passbookProofUrl || bank?.bankStatementUrl || bank?.cancelledChequeUrl) as string | undefined;
+          const passbookUrl = (bank?.passbookImageUrl || bank?.passbookUri || bank?.passbookProofUrl || bank?.bankStatementUrl || bank?.cancelledChequeUrl) as string | undefined;
 
           return (
             <InfoCard

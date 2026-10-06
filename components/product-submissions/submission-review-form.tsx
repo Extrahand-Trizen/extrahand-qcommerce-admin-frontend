@@ -49,6 +49,7 @@ export type SubmissionReviewPayload = {
   lifespanValue?: number;
   lifespanUnit?: string;
   createSellerListing?: boolean;
+  addToMasterCatalogue?: boolean;
 };
 
 interface SubmissionReviewFormProps {
@@ -124,6 +125,7 @@ export function SubmissionReviewForm({
   );
   const [images, setImages] = useState<ProductImageDraft[]>([]);
   const [createSellerListing, setCreateSellerListing] = useState(true);
+  const [addToMasterCatalogue, setAddToMasterCatalogue] = useState(false);
 
   const { data: brands = [] } = useQuery({
     queryKey: ['product-brands'],
@@ -293,6 +295,7 @@ export function SubmissionReviewForm({
         sellingPricePaise,
         quantity: qtyNum != null && !Number.isNaN(qtyNum) ? qtyNum : undefined,
         createSellerListing,
+        addToMasterCatalogue: true,
       };
     }
 
@@ -315,6 +318,7 @@ export function SubmissionReviewForm({
       lifespanValue: lvNum != null && !Number.isNaN(lvNum) ? lvNum : undefined,
       lifespanUnit: form.lifespanUnit || (lvNum ? 'Days' : undefined),
       createSellerListing,
+      addToMasterCatalogue,
     };
   }
 
@@ -336,18 +340,43 @@ export function SubmissionReviewForm({
     onSubmit(buildPayload('APPROVE'));
   }
 
-  const seller = submission.sellerId as { fullName?: string; shopName?: string } | undefined;
-  const mappedProduct = submission.mappedMasterProductId as { _id?: string; name?: string } | undefined;
+  const seller = submission.sellerId as { _id?: string; fullName?: string; shopName?: string } | undefined;
+  const storeName = seller?.shopName || seller?.fullName || 'Store';
+  const mappedProduct = submission.mappedMasterProductId as { _id?: string; name?: string; status?: string } | undefined;
+  const isMasterCatalogueMapped = mappedProduct?.status === 'ACTIVE';
 
   if (readOnly) {
     return (
       <div className="space-y-6">
+        <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-blue-950 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                Request Type: {isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'}
+              </p>
+              <h2 className="mt-0.5 text-base font-bold">
+                This product was requested by <span className="text-blue-900 underline underline-offset-2">{storeName}</span>
+              </h2>
+            </div>
+            <span
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                isMasterCatalogueMapped ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+              }`}
+            >
+              {isMasterCatalogueMapped ? 'Mapped to Master Catalogue' : 'Store-Specific Only'}
+            </span>
+          </div>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
           <InfoCard
             title="Seller Submission"
             items={[
+              ['Requested By Store', storeName],
+              ['Request Type', isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'],
               ['Product Name', submission.submittedProductName],
               ['Category', refName(submission.categoryId)],
+              ['Subcategory', refName(submission.subcategoryId)],
               ['Brand', submission.brand],
               ['Manufacturer Company', submission.manufacturerName],
               ['Manufacturer Address', submission.manufacturerAddress],
@@ -364,6 +393,14 @@ export function SubmissionReviewForm({
               ['Status', submission.status],
               ['Admin Comment', submission.adminComment],
               ['Master Product', mappedProduct?.name || '—'],
+              [
+                'Master Catalogue Status',
+                mappedProduct?.status === 'ACTIVE'
+                  ? 'In Master Catalogue (Public)'
+                  : mappedProduct
+                    ? 'Seller-Specific Only (Private)'
+                    : 'Not Created',
+              ],
             ]}
           />
         </div>
@@ -413,13 +450,36 @@ export function SubmissionReviewForm({
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-blue-950 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+              Request Type: {isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'}
+            </p>
+            <h2 className="mt-0.5 text-base font-bold">
+              This product was requested by <span className="text-blue-900 underline underline-offset-2">{storeName}</span>
+            </h2>
+          </div>
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+              isMasterCatalogueMapped ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+            }`}
+          >
+            {isMasterCatalogueMapped ? 'Mapped to Master Catalogue' : 'Store-Specific Only'}
+          </span>
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <InfoCard
           title="What the seller submitted"
           items={[
-            ['Seller', seller?.shopName || seller?.fullName],
+            ['Requested By Store', storeName],
+            ['Request Type', isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'],
+            ['Seller Account', seller?.fullName || storeName],
             ['Product Name', submission.submittedProductName],
             ['Category', refName(submission.categoryId)],
+            ['Subcategory', refName(submission.subcategoryId)],
             ['Brand', submission.brand || '—'],
             ['Manufacturer Company', submission.manufacturerName || '—'],
             ['Manufacturer Address', submission.manufacturerAddress || '—'],
@@ -752,6 +812,24 @@ export function SubmissionReviewForm({
               </label>
               <p className="text-xs text-muted-foreground">
                 Creates a seller listing using the selling price above so the product appears in their catalogue immediately.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3.5">
+            <input
+              id="addToMasterCatalogue"
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              checked={addToMasterCatalogue}
+              onChange={(e) => setAddToMasterCatalogue(e.target.checked)}
+            />
+            <div className="space-y-1">
+              <label htmlFor="addToMasterCatalogue" className="text-sm font-semibold text-amber-950">
+                Add to Master Catalogue (Make available for all sellers)
+              </label>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                If checked, this product will be added as an ACTIVE product in the global Master Catalogue so other sellers can discover and add it to their stores. If left unchecked, it is approved ONLY for this requesting seller.
               </p>
             </div>
           </div>

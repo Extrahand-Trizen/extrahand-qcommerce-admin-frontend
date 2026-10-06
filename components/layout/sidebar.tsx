@@ -51,6 +51,8 @@ const sellersNav: NavItem[] = [
       { name: 'Seller Applications', href: '/sellers/approvals' },
       { name: 'Seller Users', href: '/sellers/users' },
       { name: 'Seller Stores', href: '/sellers/stores' },
+      { name: 'Seller Payouts', href: '/sellers/payouts' },
+      { name: 'Offers & Coupons', href: '/sellers/offers' },
     ],
   },
 ];

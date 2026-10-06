@@ -146,7 +146,8 @@ export default function ProductsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="ACTIVE">Active (Master Catalogue)</SelectItem>
+                  <SelectItem value="DRAFT">Private Product (Store-Specific)</SelectItem>
                   <SelectItem value="INACTIVE">Inactive</SelectItem>
                 </SelectContent>
               </Select>
@@ -193,11 +194,18 @@ export default function ProductsPage() {
                           <Package className="h-4 w-4 text-muted-foreground" />
                         )}
                       </div>
-                      <p className="font-medium">
-                        <Link href={`/products/${String(p._id)}`} className="hover:text-amber-700 hover:underline">
-                          {String(p.name)}
-                        </Link>
-                      </p>
+                      <div>
+                        <p className="font-medium">
+                          <Link href={`/products/${String(p._id)}`} className="hover:text-amber-700 hover:underline">
+                            {String(p.name)}
+                          </Link>
+                        </p>
+                        {Boolean((p as Record<string, any>).requestedByStore?.shopName || (p as Record<string, any>).requestedByStore?.sellerName) ? (
+                          <p className="text-xs font-medium text-amber-700">
+                            Store: {String((p as Record<string, any>).requestedByStore?.shopName || (p as Record<string, any>).requestedByStore?.sellerName)}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{refName(p.categoryId)}</TableCell>

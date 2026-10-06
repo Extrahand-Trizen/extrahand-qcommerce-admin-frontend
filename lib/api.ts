@@ -64,4 +64,11 @@ export const endpoints = {
   sellerStoreCategories: (id: string) => `/sellers/${id}/store/categories`,
   sellerStoreProducts: (id: string) => `/sellers/${id}/store/products`,
   sellerListings: '/seller-listings',
+  sellerPayouts: '/sellers/admin/payouts',
+  sellerPayoutDetails: (id: string) => `/sellers/admin/payouts/${id}`,
+  sellerFinancialSummary: (sellerId: string) => `/sellers/${sellerId}/financial-summary`,
+  sellerPayoutsById: (sellerId: string) => `/sellers/${sellerId}/payouts`,
+  sellerSettlementsById: (sellerId: string) => `/sellers/${sellerId}/settlements`,
+  sellerPromotions: '/sellers/admin/promotions',
+  sellerPromotionDetails: (id: string) => `/sellers/admin/promotions/${id}`,
 };

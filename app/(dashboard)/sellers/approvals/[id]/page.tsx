@@ -195,14 +195,69 @@ export default function SellerApprovalDetailPage() {
     });
   };
 
+  const isValidWebUrl = (url?: unknown): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    const s = url.trim();
+    if (!s) return null;
+    if (
+      s.startsWith('file://') ||
+      s.startsWith('content://') ||
+      s.startsWith('ph://') ||
+      s.startsWith('/data/user/')
+    ) {
+      return null;
+    }
+    return s;
+  };
+
   const panDoc = findDocument('PAN_CARD');
-  const aadhaarDoc = findDocument('AADHAAR_CARD');
-  const aadhaarFileUrl =
-    (aadhaarDoc?.fileUrl as string) ||
-    (o.aadhaarCardUrl as string) ||
-    (o.aadhaarDocumentUri && !String(o.aadhaarDocumentUri).startsWith('file://') ? String(o.aadhaarDocumentUri) : null);
+  const panUrl =
+    isValidWebUrl(panDoc?.fileUrl) ||
+    isValidWebUrl(o.panDocumentUri) ||
+    isValidWebUrl(o.panImageUrl) ||
+    isValidWebUrl(o.panCardUrl) ||
+    isValidWebUrl(o.panUrl);
+
+  // Find all documents matching Aadhaar
+  const allAadhaarDocs = documents.filter((d) => {
+    const docType = String(d.documentType || '').toUpperCase().replace(/[- ]/g, '_');
+    const fileName = String(d.fileName || '').toLowerCase();
+    return (
+      docType.includes('AADHAAR') ||
+      docType.includes('AADHAR') ||
+      fileName.includes('aadhaar') ||
+      fileName.includes('aadhar')
+    );
+  });
+
+  const aadhaarFrontDoc =
+    allAadhaarDocs.find((d) => {
+      const docType = String(d.documentType || '').toUpperCase().replace(/[- ]/g, '_');
+      const fileName = String(d.fileName || '').toLowerCase();
+      return docType.includes('FRONT') || fileName.includes('front');
+    }) || allAadhaarDocs[0];
+
+  const aadhaarBackDoc =
+    allAadhaarDocs.find((d) => {
+      const docType = String(d.documentType || '').toUpperCase().replace(/[- ]/g, '_');
+      const fileName = String(d.fileName || '').toLowerCase();
+      return docType.includes('BACK') || fileName.includes('back');
+    }) || (allAadhaarDocs.length > 1 && allAadhaarDocs[1] !== aadhaarFrontDoc ? allAadhaarDocs[1] : undefined);
+
+  const aadhaarFrontUrl =
+    isValidWebUrl(aadhaarFrontDoc?.fileUrl) ||
+    isValidWebUrl(o.aadhaarFrontImageUrl) ||
+    isValidWebUrl(o.aadhaarCardUrl) ||
+    isValidWebUrl(o.aadhaarDocumentUri);
+  const aadhaarBackUrl =
+    isValidWebUrl(aadhaarBackDoc?.fileUrl) ||
+    isValidWebUrl(o.aadhaarBackImageUrl) ||
+    isValidWebUrl(o.aadhaarBackImage) ||
+    isValidWebUrl(o.aadhaarBackUri) ||
+    isValidWebUrl(o.aadhaarBackDocumentUri);
+  const aadhaarFileUrl = aadhaarFrontUrl;
   const shopImageDoc = findDocument('SHOP_IMAGE');
-  const shopImageUrl = (o.shopImageUrl as string) || (shopImageDoc?.fileUrl as string);
+  const shopImageUrl = isValidWebUrl(shopImageDoc?.fileUrl) || isValidWebUrl(o.shopImageUrl);
 
   const bankPassbookDoc = findDocument('BANK_PASSBOOK');
   const passbookUrl =
@@ -528,14 +583,38 @@ export default function SellerApprovalDetailPage() {
                 </div>
                 <StatusBadge
                   status={String(
-                    aadhaarDoc?.verificationStatus ||
-                      o.aadhaarVerificationStatus ||
-                      (aadhaarNumber ? 'VERIFIED' : 'NOT_VERIFIED')
+                    o.aadhaarVerificationStatus && o.aadhaarVerificationStatus !== 'PENDING'
+                      ? o.aadhaarVerificationStatus
+                      : aadhaarNumber
+                      ? 'VERIFIED'
+                      : aadhaarFrontDoc?.verificationStatus || 'NOT_VERIFIED'
                   )}
                 />
               </div>
 
-              <div className="space-y-2.5 text-sm">
+                {/* Verification Sub-checks Badge Row */}
+                <div className="grid grid-cols-2 gap-2 pt-1 pb-1">
+                  <div className="flex items-center gap-1.5 p-2 rounded bg-emerald-50/80 border border-emerald-200">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <div>
+                      <span className="text-[10px] text-emerald-800 font-semibold block">Smart OCR</span>
+                      <span className="text-[11px] font-bold text-emerald-900">
+                        {o.aadhaarOcrStatus === 'VERIFIED' || o.aadhaarVerificationStatus === 'VERIFIED' ? '✓ Verified' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-2 rounded bg-emerald-50/80 border border-emerald-200">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <div>
+                      <span className="text-[10px] text-emerald-800 font-semibold block">OTP Verification</span>
+                      <span className="text-[11px] font-bold text-emerald-900">
+                        {o.aadhaarOtpStatus === 'VERIFIED' || o.aadhaarVerificationStatus === 'VERIFIED' ? '✓ Verified' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5 text-sm">
                 <div>
                   <span className="text-xs text-muted-foreground block">Aadhaar Number</span>
                   {aadhaarNumber ? (
@@ -564,9 +643,42 @@ export default function SellerApprovalDetailPage() {
                   </span>
                 </div>
 
+                {o.aadhaarVerifiedName ? (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Name on Aadhaar / UIDAI</span>
+                    <span className="font-semibold text-emerald-800 text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 block truncate">
+                      {String(o.aadhaarVerifiedName)}
+                    </span>
+                  </div>
+                ) : null}
+
+                {o.aadhaarVerifiedDob ? (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Date of Birth (UIDAI)</span>
+                    <span className="font-medium text-foreground text-xs block">
+                      {String(o.aadhaarVerifiedDob)}
+                    </span>
+                  </div>
+                ) : null}
+
+                {o.aadhaarVerifiedAddress ? (
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Verified Aadhaar Address</span>
+                    <span className="font-medium text-foreground text-xs block bg-muted/30 p-1.5 rounded border">
+                      {String(o.aadhaarVerifiedAddress)}
+                    </span>
+                  </div>
+                ) : null}
+
+                {o.aadhaarRefId ? (
+                  <div className="text-[11px] text-muted-foreground">
+                    Provider: Cashfree | Ref ID: <span className="font-mono">{String(o.aadhaarRefId)}</span>
+                  </div>
+                ) : null}
+
                 {o.aadhaarVerifiedAt ? (
                   <div className="text-[11px] text-muted-foreground">
-                    Submitted on {format(new Date(String(o.aadhaarVerifiedAt)), 'MMM d, yyyy h:mm a')}
+                    Verified on {format(new Date(String(o.aadhaarVerifiedAt)), 'MMM d, yyyy h:mm a')}
                   </div>
                 ) : null}
 
@@ -575,60 +687,98 @@ export default function SellerApprovalDetailPage() {
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
                     Uploaded Document Proof
                   </span>
-                  {aadhaarFileUrl ? (
+                  {aadhaarFrontUrl || aadhaarBackUrl ? (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2.5 bg-background p-2 rounded border">
-                        {Boolean(/\.(jpg|jpeg|png|webp)$/i.test(aadhaarFileUrl) || String(aadhaarDoc?.mimeType || '').startsWith('image/')) ? (
-                          <img
-                            src={aadhaarFileUrl}
-                            alt="Aadhaar Card"
-                            className="h-10 w-14 rounded object-cover border shrink-0 bg-muted"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded bg-muted/60 flex items-center justify-center shrink-0">
-                            <FileText className="h-5 w-5 text-muted-foreground" />
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* FRONT CARD THUMBNAIL */}
+                        <div className="bg-background p-2 rounded border space-y-1.5 flex flex-col justify-between">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-muted-foreground">Front Card</span>
+                            {aadhaarFrontUrl ? (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-semibold border border-emerald-200">Captured</span>
+                            ) : (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded font-semibold">Missing</span>
+                            )}
                           </div>
-                        )}
-                        <div className="min-w-0 flex-1 text-xs">
-                          <p className="font-medium truncate text-foreground">
-                            {String(aadhaarDoc?.fileName || 'Aadhaar Card')}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            Card Status: <span className="font-semibold">{String(aadhaarDoc?.verificationStatus || 'PENDING')}</span>
-                          </p>
+                          {aadhaarFrontUrl ? (
+                            <div className="relative aspect-[1.58] w-full rounded overflow-hidden border bg-slate-900">
+                              <img
+                                src={aadhaarFrontUrl}
+                                alt="Aadhaar Front"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-[1.58] w-full rounded border border-dashed bg-muted/40 flex items-center justify-center text-muted-foreground text-[10px]">
+                              No Front Image
+                            </div>
+                          )}
+                          {aadhaarFrontUrl ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[11px] w-full gap-1 border-amber-300 text-amber-900 hover:bg-amber-50"
+                              onClick={() =>
+                                setPreviewDoc({
+                                  documentType: 'AADHAAR_CARD',
+                                  documentNumber: maskAadhaar(aadhaarNumber),
+                                  fileUrl: aadhaarFrontUrl,
+                                  fileName: 'Aadhaar Front Image',
+                                  verificationStatus: String(o.aadhaarVerificationStatus || 'VERIFIED'),
+                                })
+                              }
+                            >
+                              <Eye className="h-3 w-3 text-amber-600" />
+                              Preview Front
+                            </Button>
+                          ) : null}
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1 border-amber-300 text-amber-900 hover:bg-amber-50 flex-1"
-                          onClick={() =>
-                            setPreviewDoc({
-                              documentType: 'AADHAAR_CARD',
-                              documentNumber: maskAadhaar(aadhaarNumber),
-                              fileUrl: aadhaarFileUrl,
-                              fileName: aadhaarDoc?.fileName ? String(aadhaarDoc.fileName) : 'Aadhaar Card',
-                              mimeType: aadhaarDoc?.mimeType ? String(aadhaarDoc.mimeType) : undefined,
-                              verificationStatus: String(aadhaarDoc?.verificationStatus || o.aadhaarVerificationStatus || 'VERIFIED'),
-                              uploadedAt: aadhaarDoc?.uploadedAt as any,
-                            })
-                          }
-                        >
-                          <Eye className="h-3 w-3 text-amber-600" />
-                          Preview Document
-                        </Button>
-                        <a
-                          href={aadhaarFileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center h-7 w-7 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-                          title="Open full document in new tab"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                        {/* BACK CARD THUMBNAIL */}
+                        <div className="bg-background p-2 rounded border space-y-1.5 flex flex-col justify-between">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-muted-foreground">Back Card</span>
+                            {aadhaarBackUrl ? (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-semibold border border-emerald-200">Captured</span>
+                            ) : (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded font-semibold">Missing</span>
+                            )}
+                          </div>
+                          {aadhaarBackUrl ? (
+                            <div className="relative aspect-[1.58] w-full rounded overflow-hidden border bg-slate-900">
+                              <img
+                                src={aadhaarBackUrl}
+                                alt="Aadhaar Back"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="aspect-[1.58] w-full rounded border border-dashed bg-muted/40 flex items-center justify-center text-muted-foreground text-[10px]">
+                              No Back Image
+                            </div>
+                          )}
+                          {aadhaarBackUrl ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[11px] w-full gap-1 border-amber-300 text-amber-900 hover:bg-amber-50"
+                              onClick={() =>
+                                setPreviewDoc({
+                                  documentType: 'AADHAAR_CARD',
+                                  documentNumber: maskAadhaar(aadhaarNumber),
+                                  fileUrl: aadhaarBackUrl,
+                                  fileName: 'Aadhaar Back Image',
+                                  verificationStatus: String(o.aadhaarVerificationStatus || 'VERIFIED'),
+                                })
+                              }
+                            >
+                              <Eye className="h-3 w-3 text-amber-600" />
+                              Preview Back
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -674,38 +824,66 @@ export default function SellerApprovalDetailPage() {
                     Verified on {format(new Date(String(o.panVerifiedAt)), 'MMM d, yyyy h:mm a')}
                   </div>
                 ) : null}
-                {panDoc?.fileUrl ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1 border-amber-300 text-amber-900 hover:bg-amber-50 mt-1"
-                    onClick={() =>
-                      setPreviewDoc({
-                        documentType: 'PAN_CARD',
-                        documentNumber: panNumber,
-                        fileUrl: String(panDoc.fileUrl),
-                        fileName: panDoc.fileName ? String(panDoc.fileName) : 'PAN Card',
-                        mimeType: panDoc.mimeType ? String(panDoc.mimeType) : undefined,
-                        verificationStatus: String(o.panVerificationStatus || panDoc.verificationStatus || 'VERIFIED'),
-                        uploadedAt: panDoc.uploadedAt as any,
-                      })
-                    }
-                  >
-                    <Eye className="h-3 w-3 text-amber-600" />
-                    Preview PAN Card
-                  </Button>
-                ) : null}
+                {/* Uploaded Card Document & Status */}
+                <div className="pt-2 border-t border-border/60">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                    Uploaded Document Proof
+                  </span>
+                  {panUrl ? (
+                    <div className="space-y-2">
+                      <div className="bg-background p-2 rounded border space-y-1.5 flex flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-muted-foreground">PAN Card</span>
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-semibold border border-emerald-200">Captured</span>
+                        </div>
+                        <div className="relative aspect-[1.58] w-full rounded overflow-hidden border bg-slate-900">
+                          <img
+                            src={panUrl}
+                            alt="PAN Card"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[11px] w-full gap-1 border-amber-300 text-amber-900 hover:bg-amber-50"
+                          onClick={() =>
+                            setPreviewDoc({
+                              documentType: 'PAN_CARD',
+                              documentNumber: panNumber,
+                              fileUrl: panUrl,
+                              fileName: (panDoc?.fileName as string) || 'PAN Card Image',
+                              verificationStatus: String(o.panVerificationStatus || 'VERIFIED'),
+                            })
+                          }
+                        >
+                          <Eye className="h-3 w-3 text-amber-600" />
+                          Preview PAN Card
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50/70 p-2 rounded border border-amber-200">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                      <span>No document photo uploaded</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* 4. GSTIN (Optional) */}
+            {/* 4. GSTIN */}
             <div className="space-y-3 rounded-lg border p-4 bg-muted/10">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   GSTIN
                 </h4>
-                {gstinNumber ? (
+                {o.gstinApplicable === false ? (
+                  <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    Not Applicable (Exempt)
+                  </span>
+                ) : gstinNumber ? (
                   <StatusBadge status={String(o.gstinVerificationStatus || 'NOT_VERIFIED')} />
                 ) : (
                   <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded">Optional</span>
@@ -713,18 +891,18 @@ export default function SellerApprovalDetailPage() {
               </div>
               <div className="space-y-2 text-sm">
                 <div>
-                  <span className="text-xs text-muted-foreground block">GSTIN Number</span>
+                  <span className="text-xs text-muted-foreground block">GSTIN Status</span>
                   <span className="font-mono font-semibold text-foreground text-xs">
-                    {gstinNumber || 'Not Provided (Exempt)'}
+                    {o.gstinApplicable === false ? 'Not Applicable (Exempt)' : gstinNumber || 'Not Provided'}
                   </span>
                 </div>
-                {o.gstinVerifiedLegalName ? (
+                {o.gstinApplicable !== false && o.gstinVerifiedLegalName ? (
                   <div>
                     <span className="text-xs text-muted-foreground block">Legal Business Name</span>
                     <span className="font-medium text-foreground text-xs truncate block">{String(o.gstinVerifiedLegalName)}</span>
                   </div>
                 ) : null}
-                {o.gstinVerifiedTradeName ? (
+                {o.gstinApplicable !== false && o.gstinVerifiedTradeName ? (
                   <div>
                     <span className="text-xs text-muted-foreground block">Trade Name</span>
                     <span className="font-medium text-foreground text-xs truncate block">{String(o.gstinVerifiedTradeName)}</span>
@@ -900,43 +1078,47 @@ export default function SellerApprovalDetailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4">
-          {bankAccount && (bankAccount.accountNumber || bankAccount.ifscCode) ? (
+          {(bankAccount && (bankAccount.accountNumber || bankAccount.ifscCode)) || passbookUrl ? (
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-3 text-sm">
                 <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-3">
                   <span className="text-muted-foreground shrink-0">Account Holder Name</span>
                   <span className="font-semibold text-right">
-                    {String(bankAccount.accountHolderName || o.fullName || '—')}
+                    {String(bankAccount?.accountHolderName || o.fullName || '—')}
                   </span>
                 </div>
                 <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-3">
                   <span className="text-muted-foreground shrink-0">Bank Name</span>
                   <span className="font-medium text-right">
-                    {String(bankAccount.bankName || 'Bank details provided')}
+                    {String(bankAccount?.bankName || 'Bank details provided')}
                   </span>
                 </div>
                 <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-3">
                   <span className="text-muted-foreground shrink-0">Account Number</span>
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-semibold">
-                      {showFullAccount
-                        ? String(bankAccount.accountNumber)
-                        : maskAccountNumber(String(bankAccount.accountNumber))}
+                      {bankAccount?.accountNumber
+                        ? (showFullAccount
+                          ? String(bankAccount.accountNumber)
+                          : maskAccountNumber(String(bankAccount.accountNumber)))
+                        : '—'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowFullAccount(!showFullAccount)}
-                      className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-                      title={showFullAccount ? 'Hide account number' : 'Show account number'}
-                    >
-                      {showFullAccount ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    </button>
+                    {bankAccount?.accountNumber ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowFullAccount(!showFullAccount)}
+                        className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                        title={showFullAccount ? 'Hide account number' : 'Show account number'}
+                      >
+                        {showFullAccount ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-3">
                   <span className="text-muted-foreground shrink-0">IFSC Code</span>
                   <span className="font-mono font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    {String(bankAccount.ifscCode || '—')}
+                    {String(bankAccount?.ifscCode || '—')}
                   </span>
                 </div>
               </div>
@@ -953,6 +1135,7 @@ export default function SellerApprovalDetailPage() {
                 </div>
                 {passbookUrl ? (
                   <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={passbookUrl}
                       alt="Bank Passbook"
@@ -965,10 +1148,10 @@ export default function SellerApprovalDetailPage() {
                       onClick={() =>
                         setPreviewDoc({
                           documentType: 'BANK_PASSBOOK',
-                          documentNumber: String(bankAccount.accountNumber || ''),
+                          documentNumber: String(bankAccount?.accountNumber || 'PASSBOOK'),
                           fileUrl: passbookUrl,
                           fileName: 'Bank Passbook / Cheque',
-                          verificationStatus: String(bankAccount.verificationStatus || 'VERIFIED'),
+                          verificationStatus: String(bankAccount?.verificationStatus || 'VERIFIED'),
                         })
                       }
                       className="h-8 gap-1.5 text-xs text-amber-700 hover:text-amber-900 border-amber-300 hover:bg-amber-50"
@@ -997,6 +1180,7 @@ export default function SellerApprovalDetailPage() {
           )}
         </CardContent>
       </Card>
+
 
       {/* All Uploaded Documents Gallery */}
       <Card className="shadow-sm">

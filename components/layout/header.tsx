@@ -17,6 +17,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/sellers/users': 'Seller Users',
   '/sellers/stores': 'Seller Stores',
   '/sellers/approvals': 'Seller Approvals',
+  '/sellers/payouts': 'Seller Payouts',
+  '/sellers/offers': 'Seller Offers & Coupons',
   '/admin/users': 'Admin Users',
   '/admin/invites': 'Invitations',
   '/admin/settings': 'Settings',

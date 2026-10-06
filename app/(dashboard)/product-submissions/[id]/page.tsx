@@ -38,7 +38,7 @@ export default function ProductSubmissionDetailPage() {
     },
     onSuccess: (_data, variables) => {
       const messages = {
-        APPROVE: 'Product request approved and master product saved',
+        APPROVE: 'Product request approved',
         REJECT: 'Product request rejected',
         CHANGES_REQUIRED: 'Changes requested from seller',
       };
@@ -49,6 +49,21 @@ export default function ProductSubmissionDetailPage() {
       if (variables.action === 'APPROVE') {
         router.push('/product-submissions');
       }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addToCatalogueMutation = useMutation({
+    mutationFn: async () => {
+      return api(`${endpoints.productSubmissions}/${id}/add-to-master-catalogue`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Product successfully added to the Master Catalogue');
+      qc.invalidateQueries({ queryKey: ['product-submission', id] });
+      qc.invalidateQueries({ queryKey: ['submissions'] });
+      qc.invalidateQueries({ queryKey: ['master-products'] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -76,8 +91,9 @@ export default function ProductSubmissionDetailPage() {
   const status = String(submission.status);
   const isReviewable = !['APPROVED', 'REJECTED'].includes(status);
   const seller = submission.sellerId as { fullName?: string; shopName?: string } | undefined;
-  const mappedProduct = submission.mappedMasterProductId as { _id?: string; name?: string } | undefined;
+  const mappedProduct = submission.mappedMasterProductId as { _id?: string; name?: string; status?: string } | undefined;
   const mappedProductId = mappedProduct?._id ? String(mappedProduct._id) : null;
+  const isMasterCatalogueActive = mappedProduct?.status === 'ACTIVE';
 
   return (
     <div className="space-y-6">
@@ -105,6 +121,26 @@ export default function ProductSubmissionDetailPage() {
             <StatusBadge status={status} />
             {mappedProductId ? (
               <>
+                {isMasterCatalogueActive ? (
+                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                    Master Catalogue (Public)
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-500/20">
+                    Seller-Specific Only (Private)
+                  </span>
+                )}
+                {!isMasterCatalogueActive ? (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-amber-600 text-white hover:bg-amber-700"
+                    disabled={addToCatalogueMutation.isPending}
+                    onClick={() => addToCatalogueMutation.mutate()}
+                  >
+                    {addToCatalogueMutation.isPending ? 'Adding...' : 'Add to Master Catalogue'}
+                  </Button>
+                ) : null}
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/products/${mappedProductId}`}>View product</Link>
                 </Button>

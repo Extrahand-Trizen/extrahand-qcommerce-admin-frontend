@@ -486,7 +486,8 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="ACTIVE">Active (Master Catalogue - Public)</SelectItem>
+                      <SelectItem value="DRAFT">Private Product (Store-Specific)</SelectItem>
                       <SelectItem value="INACTIVE">Inactive</SelectItem>
                     </SelectContent>
                   </Select>

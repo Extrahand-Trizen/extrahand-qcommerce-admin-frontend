@@ -77,40 +77,60 @@ export default function ProductSubmissionsPage() {
               <TableHead>Lifespan</TableHead>
               <TableHead>Seller</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Catalogue Mapping</TableHead>
               <TableHead>Submitted</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableLoadingRows cols={7} />
+              <TableLoadingRows cols={8} />
             ) : !data?.length ? (
-              <TableEmptyRow cols={7} message={activeTab === 'PENDING' ? 'No pending product submissions' : 'No submissions found'} />
-            ) : data.map((s) => (
-              <TableRow key={String(s._id)}>
-                <TableCell className="font-medium">{String(s.submittedProductName)}</TableCell>
-                <TableCell className="text-slate-700">{String(s.packOrSoldAs || '—')}</TableCell>
-                <TableCell className="text-slate-700 font-medium">
-                  {s.lifespanValue != null
-                    ? `${s.lifespanValue} ${s.lifespanUnit || 'Days'}`
-                    : '—'}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {(s.sellerId as { fullName?: string; shopName?: string })?.shopName ||
-                    (s.sellerId as { fullName?: string })?.fullName ||
-                    '—'}
-                </TableCell>
-                <TableCell><StatusBadge status={String(s.status)} /></TableCell>
-                <TableCell className="text-muted-foreground">
-                  {s.createdAt ? format(new Date(String(s.createdAt)), 'MMM d, yyyy') : '—'}
-                </TableCell>
-                <TableCell>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/product-submissions/${String(s._id)}`}>Review</Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+              <TableEmptyRow cols={8} message={activeTab === 'PENDING' ? 'No pending product submissions' : 'No submissions found'} />
+            ) : data.map((s) => {
+              const mapped = s.mappedMasterProductId as { status?: string } | undefined;
+              const isMasterPublic = mapped?.status === 'ACTIVE';
+              return (
+                <TableRow key={String(s._id)}>
+                  <TableCell className="font-medium">{String(s.submittedProductName)}</TableCell>
+                  <TableCell className="text-slate-700">{String(s.packOrSoldAs || '—')}</TableCell>
+                  <TableCell className="text-slate-700 font-medium">
+                    {s.lifespanValue != null
+                      ? `${s.lifespanValue} ${s.lifespanUnit || 'Days'}`
+                      : '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {(s.sellerId as { fullName?: string; shopName?: string })?.shopName ||
+                      (s.sellerId as { fullName?: string })?.fullName ||
+                      '—'}
+                  </TableCell>
+                  <TableCell><StatusBadge status={String(s.status)} /></TableCell>
+                  <TableCell>
+                    {mapped ? (
+                      isMasterPublic ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                          Master Catalogue
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/20">
+                          Seller Specific
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {s.createdAt ? format(new Date(String(s.createdAt)), 'MMM d, yyyy') : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/product-submissions/${String(s._id)}`}>Review</Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </DataTableCard>

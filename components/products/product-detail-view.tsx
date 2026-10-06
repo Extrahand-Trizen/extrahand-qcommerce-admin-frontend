@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
+import { Button } from '@/components/ui/button';
 import { InfoCard } from '@/components/shared/info-card';
 import {
   hasProductInformation,
@@ -12,8 +13,9 @@ import { formatSpecificationRows } from '@/components/products/product-type-attr
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Package } from 'lucide-react';
+import { Package, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type NamedRef = { _id: string; name: string };
 
@@ -64,6 +66,25 @@ interface ProductDetailViewProps {
 }
 
 export function ProductDetailView({ productId }: ProductDetailViewProps) {
+  const queryClient = useQueryClient();
+
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      await api(`${endpoints.masterProducts}/${productId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'ACTIVE' }),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Product published to Master Catalogue (Public to all sellers)!');
+      queryClient.invalidateQueries({ queryKey: ['master-product', productId] });
+      queryClient.invalidateQueries({ queryKey: ['master-products'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to publish product');
+    },
+  });
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['master-product', productId],
     queryFn: async () => {
@@ -124,9 +145,52 @@ export function ProductDetailView({ productId }: ProductDetailViewProps) {
   const p = data.product;
   const images = data.images || [];
   const primaryImage = images.find((img) => img.isPrimary) || images[0];
+  const requestedByStore = p.requestedByStore as { shopName?: string; sellerName?: string } | undefined;
+  const isDraftPrivate = p.status === 'DRAFT';
 
   return (
     <div className="space-y-6">
+      {isDraftPrivate || requestedByStore ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-amber-950 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">
+                {isDraftPrivate ? 'Private Store-Specific Custom Product' : 'Catalogue Product (Store Requested)'}
+              </p>
+              <h2 className="mt-0.5 text-base font-bold">
+                Owned / Requested by Store: <span className="text-amber-950 underline underline-offset-2">{requestedByStore?.shopName || requestedByStore?.sellerName || 'Store'}</span>
+              </h2>
+              {isDraftPrivate ? (
+                <p className="mt-1 text-xs text-amber-800">
+                  This custom product is active ONLY for this store. Click <strong>Make Public Master Product</strong> to publish it to all sellers in the Master Catalogue.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                  isDraftPrivate ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                {isDraftPrivate ? 'Store-Specific Only (Private)' : 'Master Catalogue (Public)'}
+              </span>
+              {isDraftPrivate ? (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="bg-amber-800 hover:bg-amber-900 text-white gap-1.5 shadow-sm"
+                  disabled={publishMutation.isPending}
+                  onClick={() => publishMutation.mutate()}
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  {publishMutation.isPending ? 'Publishing...' : 'Make Public Master Product'}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-white p-5 sm:flex-row sm:items-start">
         <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
           {primaryImage?.imageUrl ? (
@@ -163,8 +227,10 @@ export function ProductDetailView({ productId }: ProductDetailViewProps) {
           ]}
         />
         <InfoCard
-          title="Basic details"
+          title="Basic details & Ownership"
           items={[
+            ['Owned By Store', requestedByStore?.shopName || requestedByStore?.sellerName || (isDraftPrivate ? 'Private Store' : 'Public Catalogue')],
+            ['Catalogue Scope', isDraftPrivate ? 'Store-Specific (Private)' : 'Master Catalogue (Public)'],
             ['Brand', p.brand],
             ['Reference Price', formatPaise(p.sellingPricePaise)],
             ['SKU', p.sku],
