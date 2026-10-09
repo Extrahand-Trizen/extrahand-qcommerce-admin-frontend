@@ -9,6 +9,8 @@ const variants: Record<string, string> = {
   UNDER_REVIEW: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
   APPROVED: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20',
   REJECTED: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20',
+  DELETED: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-600/30',
+
   CHANGES_REQUIRED: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
   SUSPENDED: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20',
   DRAFT: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/20',

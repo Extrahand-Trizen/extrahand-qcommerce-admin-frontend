@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { SearchInput } from '@/components/shared/search-input';
 import { DataTableCard } from '@/components/shared/data-table-card';
@@ -11,7 +11,9 @@ import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-state
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ExternalLink } from 'lucide-react';
+import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
+import { ExternalLink, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 type StoreRow = {
   sellerId: string;
@@ -28,6 +30,8 @@ type StoreRow = {
 export default function SellerStoresPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [deleteTarget, setDeleteTarget] = useState<StoreRow | null>(null);
+  const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['seller-stores', search, statusFilter],
@@ -38,6 +42,20 @@ export default function SellerStoresPage() {
       const res = await api<{ items: StoreRow[] }>(`${endpoints.sellerStores}?${params}`);
       return res.data?.items || [];
     },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return api(`${endpoints.sellers}/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast.success('Seller store deleted successfully');
+      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ['seller-stores'] });
+      qc.invalidateQueries({ queryKey: ['seller-approvals'] });
+      qc.invalidateQueries({ queryKey: ['sellers'] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete seller store'),
   });
 
   return (
@@ -105,12 +123,23 @@ export default function SellerStoresPage() {
                     <StatusBadge status={store.sellerStatus} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/sellers/stores/${store.sellerId}`}>
-                        View store
-                        <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/sellers/stores/${store.sellerId}`}>
+                          View store
+                          <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        onClick={() => setDeleteTarget(store)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -118,6 +147,24 @@ export default function SellerStoresPage() {
           </TableBody>
         </Table>
       </DataTableCard>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Delete seller store?"
+        itemName={deleteTarget?.shopName}
+        description={
+          deleteTarget
+            ? `This will permanently delete the store "${deleteTarget.shopName}" (${deleteTarget.ownerName}), including onboarding data, documents, product listings, and inventory. This cannot be undone.`
+            : undefined
+        }
+        isPending={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.sellerId);
+        }}
+      />
     </div>
   );
 }

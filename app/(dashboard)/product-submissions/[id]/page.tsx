@@ -11,7 +11,7 @@ import { ProductDetailView } from '@/components/products/product-detail-view';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
 
@@ -29,7 +29,28 @@ export default function ProductSubmissionDetailPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return api(`${endpoints.productSubmissions}/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Product submission deleted successfully');
+      qc.invalidateQueries({ queryKey: ['submissions'] });
+      router.push('/product-submissions');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleDelete = () => {
+    if (window.confirm('Are you sure you want to delete this product submission? This action cannot be undone.')) {
+      deleteMutation.mutate();
+    }
+  };
+
   const reviewMutation = useMutation({
+
     mutationFn: async (payload: SubmissionReviewPayload) => {
       return api(`${endpoints.productSubmissions}/${id}/review`, {
         method: 'POST',
@@ -89,7 +110,8 @@ export default function ProductSubmissionDetailPage() {
   }
 
   const status = String(submission.status);
-  const isReviewable = !['APPROVED', 'REJECTED'].includes(status);
+  const isReviewable = status !== 'APPROVED';
+
   const seller = submission.sellerId as { fullName?: string; shopName?: string } | undefined;
   const mappedProduct = submission.mappedMasterProductId as { _id?: string; name?: string; status?: string } | undefined;
   const mappedProductId = mappedProduct?._id ? String(mappedProduct._id) : null;
@@ -119,6 +141,15 @@ export default function ProductSubmissionDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={status} />
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={deleteMutation.isPending}
+              onClick={handleDelete}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Submission'}
+            </Button>
             {mappedProductId ? (
               <>
                 {isMasterCatalogueActive ? (
@@ -150,6 +181,7 @@ export default function ProductSubmissionDetailPage() {
               </>
             ) : null}
           </div>
+
         </div>
       </div>
 

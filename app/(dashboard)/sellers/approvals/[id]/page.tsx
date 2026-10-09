@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -49,6 +49,7 @@ import {
   Mail,
   ExternalLink,
   Info,
+  Trash2,
 } from 'lucide-react';
 
 const COMMON_SHOP_TYPES = [
@@ -68,12 +69,14 @@ const COMMON_SHOP_TYPES = [
 
 export default function SellerApprovalDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [comment, setComment] = useState('');
   const [selectedShopType, setSelectedShopType] = useState('');
   const [mapOpen, setMapOpen] = useState(false);
   const [showFullAccount, setShowFullAccount] = useState(false);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<DocumentPreviewData | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -115,6 +118,20 @@ export default function SellerApprovalDetailPage() {
       qc.invalidateQueries({ queryKey: ['seller-detail', id] });
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return api(`${endpoints.sellers}/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast.success('Seller deleted successfully');
+      qc.invalidateQueries({ queryKey: ['seller-approvals'] });
+      qc.invalidateQueries({ queryKey: ['seller-stores'] });
+      qc.invalidateQueries({ queryKey: ['sellers'] });
+      router.push('/sellers/approvals');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete seller'),
   });
 
   if (isLoading) {
@@ -303,6 +320,16 @@ export default function SellerApprovalDetailPage() {
               ) : null}
             </p>
           </div>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteModalOpen(true)}
+            className="gap-1.5 bg-red-600 hover:bg-red-700 text-white font-medium shrink-0"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Seller
+          </Button>
         </div>
       </div>
 
@@ -1394,6 +1421,48 @@ export default function SellerApprovalDetailPage() {
           if (!open) setPreviewDoc(null);
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600 border-b pb-3">
+              <Trash2 className="h-6 w-6 shrink-0 text-red-600" />
+              <h3 className="text-lg font-bold text-slate-900">Delete Seller Account</h3>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              Are you sure you want to permanently delete seller <strong className="text-slate-900">{String(o.shopName || o.fullName || 'this seller')}</strong>?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
+              This action will permanently delete the seller account, onboarding details, shop configuration, product listings, and inventory. This cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleteMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteMutation.isPending ? 'Deleting...' : 'Permanently Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,10 +11,13 @@ import { SearchInput } from '@/components/shared/search-input';
 import { DataTableCard } from '@/components/shared/data-table-card';
 import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-states';
 import { format } from 'date-fns';
+import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function ProductSubmissionsPage() {
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED' | 'ALL'>('PENDING');
+  const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['submissions', activeTab, search],
@@ -27,12 +30,31 @@ export default function ProductSubmissionsPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (submissionId: string) => {
+      return api(`${endpoints.productSubmissions}/${submissionId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Product submission status set to DELETED');
+      qc.invalidateQueries({ queryKey: ['submissions'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleDeleteRow = (submissionId: string, productName: string) => {
+    if (window.confirm(`Are you sure you want to mark "${productName}" as DELETED and remove it from seller store?`)) {
+      deleteMutation.mutate(submissionId);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Product Submissions</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Review seller product requests, complete missing catalogue data, and approve or reject.
+          Review seller product requests, complete missing catalogue data, approve, reject, or restore deleted submissions.
         </p>
       </div>
 
@@ -60,6 +82,13 @@ export default function ProductSubmissionsPage() {
           Rejected
         </Button>
         <Button
+          variant={activeTab === 'DELETED' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('DELETED')}
+        >
+          Deleted
+        </Button>
+        <Button
           variant={activeTab === 'ALL' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveTab('ALL')}
@@ -67,6 +96,7 @@ export default function ProductSubmissionsPage() {
           All Submissions
         </Button>
       </div>
+
 
       <DataTableCard toolbar={<SearchInput value={search} onChange={setSearch} placeholder="Search submissions..." />}>
         <Table>
@@ -124,10 +154,22 @@ export default function ProductSubmissionsPage() {
                     {s.createdAt ? format(new Date(String(s.createdAt)), 'MMM d, yyyy') : '—'}
                   </TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/product-submissions/${String(s._id)}`}>Review</Link>
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/product-submissions/${String(s._id)}`}>Review</Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                        title="Delete product submission"
+                        onClick={() => handleDeleteRow(String(s._id), String(s.submittedProductName))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
+
                 </TableRow>
               );
             })}

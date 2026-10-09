@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { InfoCard } from '@/components/shared/info-card';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -16,8 +16,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { StoreLocationMapDialog } from '@/components/sellers/store-location-map-dialog';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, MapPin, FileText, Clock, ShieldCheck, CreditCard, Eye, EyeOff, ExternalLink, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, MapPin, FileText, Clock, ShieldCheck, CreditCard, Eye, EyeOff, ExternalLink, AlertTriangle, Trash2 } from 'lucide-react';
 import { getCategoryLabel, maskAccountNumber, maskAadhaar } from '@/lib/seller-onboarding';
+import { toast } from 'sonner';
 
 type StoreCategory = {
   id: string;
@@ -51,11 +52,42 @@ function formatAvailability(value: StoreProduct['availability']) {
 
 export default function SellerStoreDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const qc = useQueryClient();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [mapOpen, setMapOpen] = useState(false);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [showFullBankAcc, setShowFullBankAcc] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteListingProduct, setDeleteListingProduct] = useState<StoreProduct | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return api(`${endpoints.sellers}/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast.success('Seller store deleted successfully');
+      qc.invalidateQueries({ queryKey: ['seller-stores'] });
+      qc.invalidateQueries({ queryKey: ['seller-approvals'] });
+      qc.invalidateQueries({ queryKey: ['sellers'] });
+      router.push('/sellers/stores');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete store'),
+  });
+
+  const deleteListingMutation = useMutation({
+    mutationFn: async (listingId: string) => {
+      return api(`${endpoints.sellerListings}/${listingId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      toast.success('Product removed from store successfully');
+      setDeleteListingProduct(null);
+      qc.invalidateQueries({ queryKey: ['seller-store-products', id] });
+      qc.invalidateQueries({ queryKey: ['seller-store-categories', id] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to remove product from store'),
+  });
 
   const { data: storeDetail, isLoading: detailLoading } = useQuery({
     queryKey: ['seller-detail', id],
@@ -174,6 +206,16 @@ export default function SellerStoreDetailPage() {
               </Link>
             </Button>
             <StatusBadge status={String(seller.status)} />
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteModalOpen(true)}
+              className="gap-1.5 bg-red-600 hover:bg-red-700 text-white font-medium"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Store
+            </Button>
           </div>
         </div>
       </div>
@@ -466,13 +508,14 @@ export default function SellerStoreDetailPage() {
                 <TableHead>Price</TableHead>
                 <TableHead>Availability</TableHead>
                 <TableHead className="w-[130px]">Listing</TableHead>
+                <TableHead className="w-[80px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {productsLoading || productsFetching ? (
-                <TableLoadingRows cols={6} />
+                <TableLoadingRows cols={7} />
               ) : !products.length ? (
-                <TableEmptyRow cols={6} message="No products in this category" />
+                <TableEmptyRow cols={7} message="No products in this category" />
               ) : (
                 products.map((product) => (
                   <TableRow key={product.id}>
@@ -520,6 +563,18 @@ export default function SellerStoreDetailPage() {
                         ) : null}
                       </div>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        title="Delete product from store"
+                        onClick={() => setDeleteListingProduct(product)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -527,6 +582,90 @@ export default function SellerStoreDetailPage() {
           </Table>
         </DataTableCard>
       ) : null}
+
+      {/* Delete Product Listing Confirmation Modal */}
+      {deleteListingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600 border-b pb-3">
+              <Trash2 className="h-6 w-6 shrink-0 text-red-600" />
+              <h3 className="text-lg font-bold text-slate-900">Remove Product from Store</h3>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              Are you sure you want to remove <strong className="text-slate-900">{deleteListingProduct.name}</strong> from this store?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
+              This will remove the product listing from this seller&apos;s store inventory. The seller will see it as deleted in their app and can edit &amp; resubmit it for review if needed.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteListingProduct(null)}
+                disabled={deleteListingMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+                onClick={() => deleteListingMutation.mutate(deleteListingProduct.id)}
+                disabled={deleteListingMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteListingMutation.isPending ? 'Removing...' : 'Remove Product'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600 border-b pb-3">
+              <Trash2 className="h-6 w-6 shrink-0 text-red-600" />
+              <h3 className="text-lg font-bold text-slate-900">Delete Store Account</h3>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              Are you sure you want to permanently delete store <strong className="text-slate-900">{String(onboarding.shopName || onboarding.fullName || 'this store')}</strong>?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
+              This action will permanently delete the store configuration, seller account, product listings, and live inventory. This cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleteMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteMutation.isPending ? 'Deleting...' : 'Permanently Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

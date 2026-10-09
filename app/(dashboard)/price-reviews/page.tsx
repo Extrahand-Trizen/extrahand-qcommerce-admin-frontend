@@ -12,7 +12,7 @@ import { DataTableCard } from '@/components/shared/data-table-card';
 import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-states';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { toast } from 'sonner';
-import { Check, X, Package, ArrowRight, Store, MessageSquare, Eye, Tag, Info, Layers, Clock } from 'lucide-react';
+import { Check, X, Package, ArrowRight, Store, MessageSquare, Eye, Tag, Info, Layers, Clock, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface SellerListing {
@@ -76,6 +76,9 @@ export default function PriceReviewsPage() {
   // Modal state for View Changes Diff
   const [viewChangesItem, setViewChangesItem] = useState<SellerListing | null>(null);
 
+  // Modal state for Delete Listing
+  const [deleteModalItem, setDeleteModalItem] = useState<SellerListing | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['price-reviews', activeTab, search, page],
     queryFn: async () => {
@@ -122,6 +125,20 @@ export default function PriceReviewsPage() {
     onError: (e: Error) => toast.error(e.message || 'Failed to reject changes'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return api(`${endpoints.sellerListings}/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      toast.success('Product listing deleted successfully!');
+      setDeleteModalItem(null);
+      qc.invalidateQueries({ queryKey: ['price-reviews'] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete product listing'),
+  });
+
   const rawItems = data?.items || [];
   const filteredItems = rawItems.filter((item) => {
     if (!search.trim()) return true;
@@ -141,8 +158,8 @@ export default function PriceReviewsPage() {
     rejectMutation.mutate({ id: rejectModalItem._id, reason: reasonText });
   };
 
-  const showActionsColumn = activeTab === 'UNDER_REVIEW' || activeTab === 'ALL';
-  const colsCount = showActionsColumn ? 7 : 6;
+  const showActionsColumn = true;
+  const colsCount = 7;
 
   // Helper to compute attribute diffs
   const getAttributeDiffs = (item: SellerListing) => {
@@ -398,7 +415,7 @@ export default function PriceReviewsPage() {
                                 variant="default"
                                 className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                                 onClick={() => approveMutation.mutate(item._id)}
-                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                                disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
                               >
                                 <Check className="h-3.5 w-3.5" />
                                 Approve
@@ -411,13 +428,24 @@ export default function PriceReviewsPage() {
                                   setRejectModalItem(item);
                                   setRejectionReasonInput('');
                                 }}
-                                disabled={approveMutation.isPending || rejectMutation.isPending}
+                                disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
                               >
                                 <X className="h-3.5 w-3.5" />
                                 Reject
                               </Button>
                             </>
                           )}
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                            onClick={() => setDeleteModalItem(item)}
+                            disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </Button>
                         </div>
                       </TableCell>
                     )}
@@ -696,6 +724,46 @@ export default function PriceReviewsPage() {
                 disabled={rejectMutation.isPending}
               >
                 {rejectMutation.isPending ? 'Rejecting...' : 'Reject Request'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600 border-b pb-3">
+              <Trash2 className="h-6 w-6 shrink-0 text-red-600" />
+              <h3 className="text-lg font-bold text-slate-900">Delete Product Listing</h3>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete <span className="font-semibold text-slate-900">{deleteModalItem.masterProductId?.name || 'this product'}</span> from store <span className="font-semibold text-slate-900">{deleteModalItem.sellerId?.shopName || deleteModalItem.sellerId?.storeName || deleteModalItem.sellerId?.fullName || 'Seller'}</span>?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
+              This action will remove the live product listing and shop inventory for this seller.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteModalItem(null)}
+                disabled={deleteMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white gap-1"
+                onClick={() => deleteMutation.mutate(deleteModalItem._id)}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete Listing'}
               </Button>
             </div>
           </div>
