@@ -2,17 +2,19 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { SearchInput } from '@/components/shared/search-input';
 import { DataTableCard } from '@/components/shared/data-table-card';
 import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-states';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { toast } from 'sonner';
-import { Check, X, Package, ArrowRight, Store, MessageSquare, Eye, Tag, Info, Layers, Clock, Trash2 } from 'lucide-react';
+import { Check, X, Package, ArrowRight, Store, MessageSquare, Eye, Tag, Info, Layers, Clock, Trash2, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface SellerListing {
@@ -79,8 +81,19 @@ export default function PriceReviewsPage() {
   // Modal state for Delete Listing
   const [deleteModalItem, setDeleteModalItem] = useState<SellerListing | null>(null);
 
+  const [selectedShop, setSelectedShop] = useState('all');
+
+  // Load shops list for filtering
+  const { data: shops = [] } = useQuery({
+    queryKey: ['filter-shops-price-reviews'],
+    queryFn: async () => {
+      const res = await api<{ items: Array<{ sellerId: string; shopName: string }> }>(`${endpoints.sellerStores}?limit=100`);
+      return res.data?.items || [];
+    },
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['price-reviews', activeTab, search, page],
+    queryKey: ['price-reviews', activeTab, search, selectedShop, page],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -88,6 +101,9 @@ export default function PriceReviewsPage() {
       });
       if (activeTab !== 'ALL') {
         params.set('reviewStatus', activeTab);
+      }
+      if (selectedShop !== 'all') {
+        params.set('sellerId', selectedShop);
       }
       const res = await api<{ items: SellerListing[]; totalPages: number; total: number }>(
         `${endpoints.sellerListings}?${params}`
@@ -193,12 +209,28 @@ export default function PriceReviewsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Product Catalogue & Price Reviews</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Review seller updates to attributes, description, notes, price, and units (`UNDER_REVIEW`). Click <span className="font-semibold text-slate-800">View Changes</span> to compare before vs after and approve or reject.
-        </p>
+      {/* Header with Sub-navigation */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Product Approvals</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Review seller updates to prices, units, and attributes. Compare live vs requested changes and approve or reject.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-1.5 border-border hover:bg-slate-50">
+            <Link href="/product-submissions">
+              <Layers className="h-4 w-4 text-amber-600" />
+              Custom Product Submissions
+            </Link>
+          </Button>
+          <Button asChild variant="default" size="sm" className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5">
+            <Link href="/price-reviews">
+              <Tag className="h-4 w-4" />
+              Price &amp; Unit Reviews
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Segmented Filter Tabs */}
@@ -240,7 +272,47 @@ export default function PriceReviewsPage() {
       </div>
 
       {/* Main Table Card */}
-      <DataTableCard toolbar={<SearchInput value={search} onChange={setSearch} placeholder="Search product, brand, or store..." />}>
+      <DataTableCard
+        toolbar={
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-1 flex-col gap-2.5 sm:flex-row sm:items-center">
+              <SearchInput
+                value={search}
+                onChange={(v) => { setSearch(v); setPage(1); }}
+                placeholder="Search product, brand, or store..."
+                className="w-full sm:max-w-xs"
+              />
+              <Select
+                value={selectedShop}
+                onValueChange={(v) => { setSelectedShop(v); setPage(1); }}
+              >
+                <SelectTrigger className="w-full sm:w-56">
+                  <SelectValue placeholder="Filter by Shop" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Seller Shops</SelectItem>
+                  {shops.map((s) => (
+                    <SelectItem key={s.sellerId} value={s.sellerId}>
+                      {s.shopName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {(search.trim() || selectedShop !== 'all') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setSearch(''); setSelectedShop('all'); setPage(1); }}
+                className="text-xs text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                Reset Filters
+              </Button>
+            )}
+          </div>
+        }
+      >
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -314,10 +386,20 @@ export default function PriceReviewsPage() {
 
                     {/* Seller Cell */}
                     <TableCell>
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                        <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{shopName}</span>
-                      </div>
+                      {item.sellerId?._id ? (
+                        <Link
+                          href={`/sellers/stores/${item.sellerId._id}?tab=price-changes`}
+                          className="flex items-center gap-1.5 text-sm font-medium text-slate-900 hover:text-amber-700 hover:underline"
+                        >
+                          <Store className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                          <span className="truncate">{shopName}</span>
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                          <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{shopName}</span>
+                        </div>
+                      )}
                     </TableCell>
 
                     {/* Approved Live Details (Price & Unit) */}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 
 export interface User {
@@ -18,6 +19,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     checkAuth();
@@ -50,6 +52,7 @@ export function useAuth() {
 
   function logout() {
     localStorage.removeItem('accessToken');
+    queryClient.clear();
     setUser(null);
     router.replace('/login');
   }

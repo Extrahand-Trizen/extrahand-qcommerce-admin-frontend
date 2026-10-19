@@ -1,25 +1,25 @@
 import { cn } from '@/lib/utils';
 
 const variants: Record<string, string> = {
-  ACTIVE: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20',
-  INACTIVE: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-500/10',
-  PENDING: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
-  PENDING_APPROVAL: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
-  PENDING_REVIEW: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
-  UNDER_REVIEW: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
-  APPROVED: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20',
-  REJECTED: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20',
-  DELETED: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-600/30',
+  ACTIVE: 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-400/50 font-semibold',
+  INACTIVE: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-400/20 font-medium',
+  PENDING: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-500/30',
+  PENDING_APPROVAL: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-500/30',
+  PENDING_REVIEW: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-500/30',
+  UNDER_REVIEW: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-500/30',
+  APPROVED: 'bg-amber-100/70 text-amber-950 ring-1 ring-inset ring-amber-400 font-semibold',
+  REJECTED: 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-300 font-medium',
+  DELETED: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-300',
 
-  CHANGES_REQUIRED: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
-  SUSPENDED: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20',
-  DRAFT: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/20',
-  CUSTOM: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
-  VERIFIED: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20',
-  NOT_VERIFIED: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-500/10',
-  FAILED: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20',
-  SUBMITTED: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
-  RESUBMITTED: 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/20',
+  CHANGES_REQUIRED: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-500/30',
+  SUSPENDED: 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-300 font-medium',
+  DRAFT: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-500/20',
+  CUSTOM: 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-400/30',
+  VERIFIED: 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-400/50 font-semibold',
+  NOT_VERIFIED: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-400/20',
+  FAILED: 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-300',
+  SUBMITTED: 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-400/30',
+  RESUBMITTED: 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-400/30',
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

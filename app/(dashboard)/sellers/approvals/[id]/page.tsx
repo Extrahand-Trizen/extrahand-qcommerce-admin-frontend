@@ -79,7 +79,7 @@ export default function SellerApprovalDetailPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['seller-detail', id],
     queryFn: async () => {
       const res = await api<{
@@ -91,6 +91,8 @@ export default function SellerApprovalDetailPage() {
       }>(`${endpoints.sellers}/${id}`);
       return res.data!;
     },
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const reviewMutation = useMutation({
@@ -633,9 +635,9 @@ export default function SellerApprovalDetailPage() {
                   <div className="flex items-center gap-1.5 p-2 rounded bg-emerald-50/80 border border-emerald-200">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                     <div>
-                      <span className="text-[10px] text-emerald-800 font-semibold block">OTP Verification</span>
+                      <span className="text-[10px] text-emerald-800 font-semibold block">Card Authenticity</span>
                       <span className="text-[11px] font-bold text-emerald-900">
-                        {o.aadhaarOtpStatus === 'VERIFIED' || o.aadhaarVerificationStatus === 'VERIFIED' ? '✓ Verified' : 'Pending'}
+                        {o.aadhaarVerificationStatus === 'VERIFIED' ? '✓ Validated' : 'Pending'}
                       </span>
                     </div>
                   </div>
@@ -658,6 +660,8 @@ export default function SellerApprovalDetailPage() {
                         {showFullAadhaar ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                       </button>
                     </div>
+                  ) : o.aadhaarVerificationStatus === 'VERIFIED' ? (
+                    <span className="text-xs text-emerald-700 font-semibold block">Verified via Document Images</span>
                   ) : (
                     <span className="text-xs text-red-600 font-semibold block">Missing (Mandatory)</span>
                   )}
@@ -1227,9 +1231,27 @@ export default function SellerApprovalDetailPage() {
               {documents.map((doc) => {
                 const docType = String(doc.documentType);
                 const fileUrl = doc.fileUrl ? String(doc.fileUrl) : '';
+                const cleanFileUrl = fileUrl.split('?')[0].split('#')[0];
                 const isImage =
-                  Boolean(fileUrl && /\.(jpg|jpeg|png|webp)$/i.test(fileUrl)) ||
-                  String(doc.mimeType || '').startsWith('image/');
+                  Boolean(cleanFileUrl && /\.(jpg|jpeg|png|webp|svg|gif)$/i.test(cleanFileUrl)) ||
+                  String(doc.mimeType || '').startsWith('image/') ||
+                  [
+                    'AADHAAR_CARD',
+                    'AADHAAR_CARD_BACK',
+                    'AADHAAR_FRONT',
+                    'AADHAAR_BACK',
+                    'AADHAAR',
+                    'AADHAR',
+                    'PAN_CARD',
+                    'PAN',
+                    'SHOP_IMAGE',
+                    'BANK_PASSBOOK',
+                    'PASSBOOK',
+                    'BANK_DOCUMENT',
+                    'CANCELLED_CHEQUE',
+                    'CHEQUE',
+                    'STORE_FRONT',
+                  ].includes(docType.toUpperCase());
 
                 return (
                   <div

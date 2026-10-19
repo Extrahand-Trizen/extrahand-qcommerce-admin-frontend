@@ -63,6 +63,8 @@ export const endpoints = {
   sellerStores: '/sellers/stores',
   sellerStoreCategories: (id: string) => `/sellers/${id}/store/categories`,
   sellerStoreProducts: (id: string) => `/sellers/${id}/store/products`,
+  sellerStoreOrders: (id: string) => `/sellers/${id}/orders`,
+  adminOrders: '/sellers/admin/orders',
   sellerListings: '/seller-listings',
   sellerPayouts: '/sellers/admin/payouts',
   sellerPayoutDetails: (id: string) => `/sellers/admin/payouts/${id}`,

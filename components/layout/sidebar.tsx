@@ -4,7 +4,22 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, FolderTree, Package, Users, ChevronDown, ChevronRight, X, Shield, Mail, Settings,
+  LayoutDashboard,
+  FolderTree,
+  Package,
+  Users,
+  ChevronDown,
+  ChevronRight,
+  X,
+  Shield,
+  Mail,
+  Settings,
+  Store,
+  ClipboardCheck,
+  ShoppingBag,
+  CreditCard,
+  Tag,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
@@ -17,57 +32,77 @@ type NavItem = {
   children?: Array<{ name: string; href: string }>;
 };
 
+// 1. Dashboard
 const dashboardNav: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
 ];
 
-const catalogueNav: NavItem[] = [
+// 2. Sellers & Shops
+const sellersShopsNav: NavItem[] = [
   {
-    name: 'Catalogue',
+    name: 'Sellers & Shops',
+    icon: Store,
+    children: [
+      { name: 'Shops & Stores', href: '/sellers/stores' },
+      { name: 'Seller Users', href: '/sellers/users' },
+    ],
+  },
+];
+
+// 3. Product Approvals
+const productApprovalsNav: NavItem[] = [
+  {
+    name: 'Product Approvals',
+    icon: ClipboardCheck,
+    children: [
+      { name: 'Product Submissions', href: '/product-submissions' },
+      { name: 'Price & Unit Reviews', href: '/price-reviews' },
+    ],
+  },
+];
+
+// 4. Master Catalogue
+const masterCatalogueNav: NavItem[] = [
+  {
+    name: 'Master Catalogue',
     icon: FolderTree,
     children: [
+      { name: 'Master Products', href: '/products' },
       { name: 'Categories', href: '/catalogue/categories' },
       { name: 'Subcategories', href: '/catalogue/subcategories' },
       { name: 'Product Types', href: '/catalogue/product-types' },
       { name: 'Attributes', href: '/catalogue/attributes' },
     ],
   },
-  {
-    name: 'Products',
-    icon: Package,
-    children: [
-      { name: 'Products', href: '/products' },
-      { name: 'Product Submissions', href: '/product-submissions' },
-      { name: 'Price & Listing Reviews', href: '/price-reviews' },
-    ],
-  },
 ];
 
-const sellersNav: NavItem[] = [
-  {
-    name: 'Sellers',
-    icon: Users,
-    children: [
-      { name: 'Seller Applications', href: '/sellers/approvals' },
-      { name: 'Seller Users', href: '/sellers/users' },
-      { name: 'Seller Stores', href: '/sellers/stores' },
-      { name: 'Seller Payouts', href: '/sellers/payouts' },
-      { name: 'Offers & Coupons', href: '/sellers/offers' },
-    ],
-  },
+// 5. Orders
+const ordersNav: NavItem[] = [
+  { name: 'Orders', href: '/orders', icon: ShoppingBag },
 ];
 
-const sellerOpsNav: NavItem[] = [
-  { name: 'Product Submissions', href: '/product-submissions', icon: Package },
+// 6. Payouts & Transactions
+const payoutsNav: NavItem[] = [
+  { name: 'Payouts & Transactions', href: '/sellers/payouts', icon: CreditCard },
+];
+
+// 7. Coupons
+const couponsNav: NavItem[] = [
+  { name: 'Coupons', href: '/sellers/offers', icon: Tag },
+];
+
+// 8. Verification & Documents
+const verificationNav: NavItem[] = [
+  { name: 'Verification & Documents', href: '/sellers/approvals', icon: ShieldCheck },
 ];
 
 export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const { isSuperAdmin, isCatalogueAdmin, isSellerOpsAdmin } = useAuth();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    Catalogue: true,
-    Products: true,
-    Sellers: true,
+    'Sellers & Shops': true,
+    'Product Approvals': true,
+    'Master Catalogue': false,
   });
   const [superAdminOpen, setSuperAdminOpen] = useState<boolean>(true);
 
@@ -77,11 +112,30 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
     }
   }, [pathname]);
 
+  const allSections = [
+    ...dashboardNav,
+    ...sellersShopsNav,
+    ...productApprovalsNav,
+    ...masterCatalogueNav,
+    ...ordersNav,
+    ...payoutsNav,
+    ...couponsNav,
+    ...verificationNav,
+  ];
+
   const nav = isSellerOpsAdmin
-    ? [...dashboardNav, ...sellersNav, ...sellerOpsNav]
+    ? [
+        ...dashboardNav,
+        ...sellersShopsNav,
+        ...productApprovalsNav,
+        ...ordersNav,
+        ...payoutsNav,
+        ...couponsNav,
+        ...verificationNav,
+      ]
     : isCatalogueAdmin
-      ? [...dashboardNav, ...catalogueNav]
-      : [...dashboardNav, ...catalogueNav, ...sellersNav, ...sellerOpsNav];
+      ? [...dashboardNav, ...productApprovalsNav, ...masterCatalogueNav]
+      : allSections;
 
   return (
     <>

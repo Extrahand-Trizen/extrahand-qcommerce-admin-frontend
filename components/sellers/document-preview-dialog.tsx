@@ -45,12 +45,33 @@ export function DocumentPreviewDialog({
 
   const title = getDocumentLabel(document.documentType);
   const fileUrl = document.fileUrl ? String(document.fileUrl) : '';
+  const cleanUrl = fileUrl.split('?')[0].split('#')[0];
   const isPdf =
-    Boolean(fileUrl && fileUrl.toLowerCase().endsWith('.pdf')) ||
+    Boolean(cleanUrl && cleanUrl.toLowerCase().endsWith('.pdf')) ||
     Boolean(document.mimeType && document.mimeType.toLowerCase().includes('pdf'));
   const isImage =
-    Boolean(fileUrl && /\.(jpg|jpeg|png|webp|svg|gif)$/i.test(fileUrl)) ||
-    Boolean(document.mimeType && document.mimeType.toLowerCase().startsWith('image/'));
+    Boolean(cleanUrl && /\.(jpg|jpeg|png|webp|svg|gif)$/i.test(cleanUrl)) ||
+    Boolean(document.mimeType && document.mimeType.toLowerCase().startsWith('image/')) ||
+    Boolean(
+      document.documentType &&
+        [
+          'AADHAAR_CARD',
+          'AADHAAR_CARD_BACK',
+          'AADHAAR_FRONT',
+          'AADHAAR_BACK',
+          'AADHAAR',
+          'AADHAR',
+          'PAN_CARD',
+          'PAN',
+          'SHOP_IMAGE',
+          'BANK_PASSBOOK',
+          'PASSBOOK',
+          'BANK_DOCUMENT',
+          'CANCELLED_CHEQUE',
+          'CHEQUE',
+          'STORE_FRONT',
+        ].includes(String(document.documentType).toUpperCase())
+    );
 
   const handleCopyNumber = () => {
     if (document.documentNumber) {
