@@ -219,7 +219,7 @@ export default function SellerStoreDetailPage() {
     }
     setSelectedCategoryId((current) => {
       if (current && categories.some((c) => c.id === current)) return current;
-      return categories[0].id;
+      return null;
     });
   }, [categories]);
 
@@ -234,6 +234,17 @@ export default function SellerStoreDetailPage() {
         `${endpoints.sellerStoreProducts(id)}?${p}`,
       );
       return res.data || { items: [], total: 0 };
+    },
+  });
+
+  // 3a. Total Products in Store (store-wide count, unaffected by selected category or search)
+  const { data: storeProductCountData } = useQuery({
+    queryKey: ['seller-store-total-products-count', id],
+    queryFn: async () => {
+      const res = await api<{ items: StoreProduct[]; total: number }>(
+        `${endpoints.sellerStoreProducts(id)}?limit=1`,
+      );
+      return res.data?.total ?? 0;
     },
   });
 
@@ -322,6 +333,8 @@ export default function SellerStoreDetailPage() {
       setDeleteListingProduct(null);
       qc.invalidateQueries({ queryKey: ['seller-store-products', id] });
       qc.invalidateQueries({ queryKey: ['seller-store-categories', id] });
+      qc.invalidateQueries({ queryKey: ['seller-store-total-products-count', id] });
+      qc.invalidateQueries({ queryKey: ['seller-stores'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to remove product from store'),
   });
@@ -333,6 +346,7 @@ export default function SellerStoreDetailPage() {
       setViewChangesItem(null);
       qc.invalidateQueries({ queryKey: ['shop-price-reviews', id] });
       qc.invalidateQueries({ queryKey: ['seller-store-products', id] });
+      qc.invalidateQueries({ queryKey: ['seller-store-total-products-count', id] });
       qc.invalidateQueries({ queryKey: ['seller-stores'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to approve changes'),
@@ -361,23 +375,57 @@ export default function SellerStoreDetailPage() {
   const seller = storeDetail?.seller || {};
   const onboarding = storeDetail?.onboarding || {};
   const documents = (storeDetail?.documents || []) as Array<Record<string, unknown>>;
+  const isValidWebUrl = (url?: unknown): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    const s = url.trim();
+    if (!s) return null;
+    if (
+      s.startsWith('file://') ||
+      s.startsWith('content://') ||
+      s.startsWith('ph://') ||
+      s.startsWith('/data/user/')
+    ) {
+      return null;
+    }
+    return s;
+  };
+
   const aadhaarDoc = documents.find((d) =>
     ['AADHAAR_CARD', 'AADHAAR', 'AADHAR_CARD', 'AADHAR', 'AADHAAR_DOCUMENT', 'KYC_DOCUMENT'].includes(
       String(d.documentType || '').toUpperCase().replace(/[- ]/g, '_'),
     ),
   );
   const aadhaarFileUrl =
-    (aadhaarDoc?.fileUrl as string) ||
-    (onboarding.aadhaarCardUrl as string) ||
-    (onboarding.aadhaarDocumentUri && !String(onboarding.aadhaarDocumentUri).startsWith('file://')
-      ? String(onboarding.aadhaarDocumentUri)
-      : null);
+    isValidWebUrl(aadhaarDoc?.fileUrl) ||
+    isValidWebUrl(onboarding.aadhaarCardUrl) ||
+    isValidWebUrl(onboarding.aadhaarDocumentUri);
+
+  const selfieDoc = documents.find((d) =>
+    ['SELFIE', 'LIVE_SELFIE', 'SELLER_SELFIE', 'OWNER_SELFIE'].includes(
+      String(d.documentType || '').toUpperCase().replace(/[- ]/g, '_'),
+    ),
+  );
+  const selfieFileUrl =
+    isValidWebUrl(selfieDoc?.fileUrl) ||
+    isValidWebUrl(onboarding.kycSelfieUri) ||
+    isValidWebUrl(onboarding.selfieUrl) ||
+    isValidWebUrl((seller as any)?.photoURL) ||
+    null;
 
   const products = productsPage?.items || [];
   const selectedCategory = useMemo(
     () => categories.find((c) => c.id === selectedCategoryId) || null,
     [categories, selectedCategoryId],
   );
+
+  const categoriesTotal = useMemo(
+    () => categories.reduce((sum, c) => sum + (c.productCount || 0), 0),
+    [categories],
+  );
+
+  const totalStoreProducts =
+    storeProductCountData ??
+    (categories.length > 0 ? categoriesTotal : (selectedCategoryId === null ? productsPage?.total : 0) ?? 0);
 
   const priceReviewItems = priceReviewsData?.items || [];
   const pendingCustomCount = customSubmissions.filter((s) => s.status === 'PENDING').length;
@@ -429,14 +477,14 @@ export default function SellerStoreDetailPage() {
               </h1>
               <StatusBadge status={String(seller.status || 'ACTIVE')} />
               {totalPendingForShop > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-300">
-                  <Clock className="h-3 w-3 text-amber-600" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-900 border border-slate-300">
+                  <Clock className="h-3 w-3 text-slate-700" />
                   {totalPendingForShop} Pending Action{totalPendingForShop === 1 ? '' : 's'}
                 </span>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <span className="font-mono bg-amber-50 border border-amber-200/80 text-amber-900 px-2 py-0.5 rounded font-medium">
+              <span className="font-mono bg-slate-100 border border-slate-200 text-slate-900 px-2 py-0.5 rounded font-medium">
                 Shop ID: {id}
               </span>
               <span>&bull;</span>
@@ -479,9 +527,9 @@ export default function SellerStoreDetailPage() {
           <TabsTrigger value="products" className="gap-1.5 text-xs font-medium data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950 data-[state=active]:font-semibold data-[state=active]:shadow-xs">
             <Package className="h-3.5 w-3.5" />
             Products
-            {productsPage?.total ? (
-              <span className="ml-1 rounded-full bg-slate-200 px-1.5 py-0.2 text-[10px] text-slate-800">
-                {productsPage.total}
+            {totalStoreProducts > 0 ? (
+              <span className="ml-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-900 border border-slate-200 shadow-2xs">
+                {totalStoreProducts}
               </span>
             ) : null}
           </TabsTrigger>
@@ -489,7 +537,7 @@ export default function SellerStoreDetailPage() {
             <AlertCircle className="h-3.5 w-3.5" />
             Pending Review
             {totalPendingForShop > 0 ? (
-              <span className="ml-1 rounded-full bg-slate-950 px-1.5 py-0.2 text-[10px] font-bold text-amber-300">
+              <span className="ml-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-900 border border-slate-200 shadow-2xs">
                 {totalPendingForShop}
               </span>
             ) : null}
@@ -498,7 +546,7 @@ export default function SellerStoreDetailPage() {
             <Layers className="h-3.5 w-3.5" />
             Custom Product Requests
             {pendingCustomCount > 0 ? (
-              <span className="ml-1 rounded-full bg-slate-950 px-1.5 py-0.2 text-[10px] font-bold text-amber-300">
+              <span className="ml-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-900 border border-slate-200 shadow-2xs">
                 {pendingCustomCount}
               </span>
             ) : null}
@@ -507,7 +555,7 @@ export default function SellerStoreDetailPage() {
             <Tag className="h-3.5 w-3.5" />
             Price / Unit Changes
             {pendingPriceCount > 0 ? (
-              <span className="ml-1 rounded-full bg-purple-600 px-1.5 py-0.2 text-[10px] font-bold text-white">
+              <span className="ml-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-900 border border-slate-200 shadow-2xs">
                 {pendingPriceCount}
               </span>
             ) : null}
@@ -516,7 +564,7 @@ export default function SellerStoreDetailPage() {
             <ShoppingBag className="h-3.5 w-3.5" />
             Orders
             {ordersData?.total ? (
-              <span className="ml-1 rounded-full bg-slate-200 px-1.5 py-0.2 text-[10px] text-slate-800">
+              <span className="ml-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-900 border border-slate-200 shadow-2xs">
                 {ordersData.total}
               </span>
             ) : null}
@@ -535,15 +583,15 @@ export default function SellerStoreDetailPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
               <p className="text-xs font-medium text-muted-foreground">Total Listed Products</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{productsPage?.total ?? 0}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{totalStoreProducts}</p>
             </div>
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
               <p className="text-xs font-medium text-muted-foreground">Pending Custom Products</p>
-              <p className="mt-1 text-2xl font-bold text-amber-700">{pendingCustomCount}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{pendingCustomCount}</p>
             </div>
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
               <p className="text-xs font-medium text-muted-foreground">Pending Price Changes</p>
-              <p className="mt-1 text-2xl font-bold text-purple-700">{pendingPriceCount}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{pendingPriceCount}</p>
             </div>
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
               <p className="text-xs font-medium text-muted-foreground">Delivered Orders</p>
@@ -693,6 +741,34 @@ export default function SellerStoreDetailPage() {
                 ['PAN Holder Name', (onboarding.panVerifiedName as string) || (onboarding.panHolderName as string) || '—'],
                 ['GSTIN', (onboarding.gstin as string) || (onboarding.gstinNumber as string) || '—'],
                 ['GST Legal Name', (onboarding.gstinVerifiedLegalName as string) || (onboarding.gstLegalName as string) || '—'],
+                [
+                  'Live Selfie',
+                  selfieFileUrl ? (
+                    <div className="flex items-center gap-2" key="selfie-doc-preview">
+                      <div className="relative h-8 w-8 shrink-0 rounded-full overflow-hidden border border-emerald-500 bg-slate-900">
+                        <img
+                          src={selfieFileUrl}
+                          alt="Seller Selfie"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      <a
+                        href={selfieFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View Live Selfie
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic" key="no-selfie">No selfie image attached</span>
+                  ),
+                ],
               ]}
               action={
                 <Button asChild variant="ghost" size="sm" className="h-8 text-xs text-amber-700 hover:text-amber-800">
@@ -796,6 +872,19 @@ export default function SellerStoreDetailPage() {
                 <p className="text-sm text-muted-foreground">This store has no listed products yet.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryId(null)}
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                      selectedCategoryId === null
+                        ? 'border-amber-400 bg-amber-50 text-amber-900 ring-1 ring-amber-300'
+                        : 'border-border bg-white text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    All Products
+                    <span className="ml-1.5 text-[11px] opacity-75">({totalStoreProducts})</span>
+                  </button>
                   {categories.map((c) => {
                     const active = c.id === selectedCategoryId;
                     return (
@@ -828,7 +917,11 @@ export default function SellerStoreDetailPage() {
                     {selectedCategory?.name || 'All Store Products'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {productsPage?.total ?? 0} product{(productsPage?.total ?? 0) === 1 ? '' : 's'} listed in this store
+                    {productSearch.trim()
+                      ? `${productsPage?.total ?? 0} result${(productsPage?.total ?? 0) === 1 ? '' : 's'} matching "${productSearch.trim()}" · ${totalStoreProducts} total in store`
+                      : selectedCategory
+                      ? `${productsPage?.total ?? 0} product${(productsPage?.total ?? 0) === 1 ? '' : 's'} in ${selectedCategory.name} · ${totalStoreProducts} total in store`
+                      : `${totalStoreProducts} product${totalStoreProducts === 1 ? '' : 's'} listed in this store`}
                   </p>
                 </div>
                 <SearchInput
@@ -948,15 +1041,15 @@ export default function SellerStoreDetailPage() {
         {/* TAB 3: PENDING REVIEW TAB */}
         {/* =================================================================== */}
         <TabsContent value="pending" className="space-y-6">
-          <div className="rounded-lg bg-amber-50/70 border border-amber-200 p-4">
+          <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-slate-900 shrink-0 mt-0.5" />
               <div>
-                <h3 className="text-sm font-semibold text-amber-900">
+                <h3 className="text-sm font-bold text-slate-900">
                   Shop Approval Queue ({totalPendingForShop} Pending)
                 </h3>
-                <p className="text-xs text-amber-800 mt-0.5">
-                  Showing custom products and price/unit changes submitted by <strong>{String(onboarding.shopName)}</strong> awaiting review.
+                <p className="text-xs text-slate-700 mt-0.5">
+                  Showing custom products and price/unit changes submitted by <strong className="text-slate-900 font-semibold">{String(onboarding.shopName)}</strong> awaiting review.
                 </p>
               </div>
             </div>
@@ -965,7 +1058,7 @@ export default function SellerStoreDetailPage() {
           {/* Pending Custom Products Section */}
           <div className="space-y-3">
             <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-              <Layers className="h-4 w-4 text-amber-600" />
+              <Layers className="h-4 w-4 text-slate-900" />
               Pending Custom Product Requests ({pendingCustomCount})
             </h3>
             <DataTableCard>
@@ -1040,7 +1133,7 @@ export default function SellerStoreDetailPage() {
           {/* Pending Price & Unit Changes Section */}
           <div className="space-y-3 pt-4">
             <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-              <Tag className="h-4 w-4 text-purple-600" />
+              <Tag className="h-4 w-4 text-slate-900" />
               Pending Price &amp; Unit Changes ({pendingPriceCount})
             </h3>
             <DataTableCard>
@@ -1077,17 +1170,21 @@ export default function SellerStoreDetailPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-0.5 text-xs">
-                              {item.pendingSellingPricePaise != null ? (
-                                <p className="font-bold text-amber-700">
-                                  ₹{(item.pendingSellingPricePaise / 100).toFixed(2)}
-                                </p>
-                              ) : (
-                                <span className="text-muted-foreground">Price unchanged</span>
+                            <div className="flex flex-wrap gap-1">
+                              {item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== item.sellingPricePaise && (
+                                <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                                  Price
+                                </span>
                               )}
-                              {item.pendingUnit ? (
-                                <p className="font-medium text-purple-700">Unit: {item.pendingUnit}</p>
-                              ) : null}
+                              {item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard') && (
+                                <span className="rounded bg-blue-100 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-900">
+                                  Unit
+                                </span>
+                              )}
+                              {!(item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== item.sellingPricePaise) &&
+                               !(item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard')) && (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -1097,6 +1194,13 @@ export default function SellerStoreDetailPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-xs"
+                                onClick={() => setViewChangesItem(item)}
+                              >
+                                Review Request
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1317,17 +1421,21 @@ export default function SellerStoreDetailPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-0.5 text-xs">
-                          {item.pendingSellingPricePaise != null ? (
-                            <p className="font-bold text-amber-700">
-                              ₹{(item.pendingSellingPricePaise / 100).toFixed(2)}
-                            </p>
-                          ) : (
-                            <span className="text-muted-foreground">Price unchanged</span>
+                        <div className="flex flex-wrap gap-1">
+                          {item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== item.sellingPricePaise && (
+                            <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                              Price
+                            </span>
                           )}
-                          {item.pendingUnit ? (
-                            <p className="font-medium text-purple-700">Unit: {item.pendingUnit}</p>
-                          ) : null}
+                          {item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard') && (
+                            <span className="rounded bg-blue-100 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-900">
+                              Unit
+                            </span>
+                          )}
+                          {!(item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== item.sellingPricePaise) &&
+                           !(item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard')) && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -1341,6 +1449,13 @@ export default function SellerStoreDetailPage() {
                       <TableCell className="text-right">
                         {item.reviewStatus === 'UNDER_REVIEW' || item.reviewStatus === 'PENDING_REVIEW' ? (
                           <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              className="bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-xs"
+                              onClick={() => setViewChangesItem(item)}
+                            >
+                              Review Request
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
@@ -1362,7 +1477,15 @@ export default function SellerStoreDetailPage() {
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Reviewed</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs"
+                            onClick={() => setViewChangesItem(item)}
+                          >
+                            <Eye className="mr-1 h-3.5 w-3.5" />
+                            View Details
+                          </Button>
                         )}
                       </TableCell>
                     </TableRow>
@@ -1657,6 +1780,218 @@ export default function SellerStoreDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Review Price & Unit Change Modal */}
+      {viewChangesItem && (() => {
+        const isPending =
+          viewChangesItem.reviewStatus === 'UNDER_REVIEW' ||
+          viewChangesItem.reviewStatus === 'PENDING_REVIEW';
+        const livePrice = (viewChangesItem.sellingPricePaise || 0) / 100;
+        const pendingPrice =
+          viewChangesItem.pendingSellingPricePaise != null
+            ? viewChangesItem.pendingSellingPricePaise / 100
+            : null;
+        const priceDiff = pendingPrice != null ? pendingPrice - livePrice : 0;
+        const pctDiff =
+          livePrice > 0 && priceDiff !== 0
+            ? ((priceDiff / livePrice) * 100).toFixed(1)
+            : null;
+        const liveUnit =
+          viewChangesItem.unit || viewChangesItem.masterProductId?.variant || 'Standard';
+        const pendingUnit = viewChangesItem.pendingUnit;
+        const isUnitChanged = Boolean(pendingUnit && pendingUnit !== liveUnit);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+            <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl border border-border space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-start justify-between border-b pb-4 border-border">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-5 w-5 text-purple-600" />
+                    <h3 className="text-xl font-bold text-slate-900">
+                      Review Price &amp; Unit Change
+                    </h3>
+                    <StatusBadge status={viewChangesItem.reviewStatus} />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Store: <span className="font-semibold text-slate-800">{String(onboarding.shopName || 'Store Profile')}</span>
+                    {viewChangesItem.reviewSubmittedAt || viewChangesItem.createdAt ? (
+                      <> &bull; Submitted on {format(new Date(viewChangesItem.reviewSubmittedAt || viewChangesItem.createdAt), 'PPP p')}</>
+                    ) : null}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewChangesItem(null)}
+                  className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Product Summary */}
+              <div className="flex items-center gap-3.5 rounded-lg border border-border bg-slate-50 p-3.5">
+                {viewChangesItem.masterProductId?.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={viewChangesItem.masterProductId.imageUrl}
+                    alt={viewChangesItem.masterProductId.name || 'Product'}
+                    className="h-14 w-14 rounded-md border border-border object-cover bg-white shrink-0"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-md border border-border bg-white text-slate-400 shrink-0">
+                    <Package className="h-6 w-6" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <h4 className="font-semibold text-slate-900 text-sm truncate">
+                    {viewChangesItem.masterProductId?.name || 'Product'}
+                  </h4>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    {viewChangesItem.masterProductId?.brand ? (
+                      <span>Brand: <strong className="text-slate-700">{viewChangesItem.masterProductId.brand}</strong></span>
+                    ) : null}
+                    {viewChangesItem.masterProductId?.categoryName ? (
+                      <>
+                        <span>&bull;</span>
+                        <span>Category: <strong className="text-slate-700">{viewChangesItem.masterProductId.categoryName}</strong></span>
+                      </>
+                    ) : null}
+                    {viewChangesItem.masterProductId?._id ? (
+                      <>
+                        <span>&bull;</span>
+                        <span className="font-mono text-[11px]">ID: {viewChangesItem.masterProductId._id.slice(-6)}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              {/* Comparison Grid */}
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-amber-600" /> Comparison (Current Live vs Requested)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {/* Current Live Values */}
+                  <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-2 shadow-2xs">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      Current Live Values
+                    </span>
+                    <div className="space-y-1.5 pt-1">
+                      <div>
+                        <span className="text-[11px] text-muted-foreground block">Selling Price</span>
+                        <span className="text-xl font-bold text-slate-900">₹{livePrice.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-muted-foreground block">Selling Unit</span>
+                        <span className="text-xs font-semibold text-slate-700">{liveUnit}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Requested Pending Values */}
+                  <div className="rounded-lg border border-slate-300 bg-slate-50 p-4 space-y-2 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                        Requested by Seller
+                      </span>
+                      {priceDiff !== 0 && (
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            priceDiff > 0
+                              ? 'bg-amber-100 text-slate-900 border border-amber-300'
+                              : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                          }`}
+                        >
+                          {priceDiff > 0 ? `+₹${priceDiff.toFixed(2)}` : `-₹${Math.abs(priceDiff).toFixed(2)}`}
+                          {pctDiff ? ` (${priceDiff > 0 ? '+' : ''}${pctDiff}%)` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-1.5 pt-1">
+                      <div>
+                        <span className="text-[11px] text-slate-600 block">Requested Price</span>
+                        {pendingPrice != null ? (
+                          <span className="text-xl font-bold text-slate-900">₹{pendingPrice.toFixed(2)}</span>
+                        ) : (
+                          <span className="text-sm font-medium text-slate-600 italic">
+                            Price unchanged (₹{livePrice.toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-slate-600 block">Requested Unit</span>
+                        {isUnitChanged ? (
+                          <span className="text-xs font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded border border-purple-200">
+                            {pendingUnit} (Changed)
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-600">
+                            {liveUnit} (Unchanged)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rejection Note if already rejected */}
+              {viewChangesItem.rejectionReason && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-1 text-xs">
+                  <span className="font-bold text-red-900">Rejection Note:</span>
+                  <p className="text-red-800">{viewChangesItem.rejectionReason}</p>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewChangesItem(null)}
+                >
+                  Close
+                </Button>
+
+                {isPending && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-red-300 text-red-600 hover:bg-red-50 gap-1.5"
+                      onClick={() => {
+                        const target = viewChangesItem;
+                        setViewChangesItem(null);
+                        setRejectPriceModalItem(target);
+                      }}
+                      disabled={approvePriceMutation.isPending || rejectPriceMutation.isPending}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Reject Changes
+                    </Button>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 font-medium shadow-xs"
+                      onClick={() => approvePriceMutation.mutate(viewChangesItem._id)}
+                      disabled={approvePriceMutation.isPending || rejectPriceMutation.isPending}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      {approvePriceMutation.isPending ? 'Approving...' : 'Approve & Publish Live'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Order Details Sheet/Modal */}
       {selectedOrderDetails && (

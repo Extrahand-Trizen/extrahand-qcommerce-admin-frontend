@@ -203,6 +203,7 @@ export default function SellerApprovalDetailPage() {
     DRUG_LICENSE: ['DRUG_LICENSE', 'DRUG_LICENCE', 'DRUG_SALE_LICENSE'],
     TRADE_LICENSE: ['TRADE_LICENSE', 'TRADE_LICENCE', 'TRADE_CERTIFICATE'],
     PHARMACIST_REGISTRATION: ['PHARMACIST_REGISTRATION', 'PHARMACIST_CERTIFICATE', 'PHARMACY_COUNCIL_REGISTRATION'],
+    SELFIE: ['SELFIE', 'LIVE_SELFIE', 'SELLER_SELFIE', 'OWNER_SELFIE'],
   };
 
   const findDocument = (type: string) => {
@@ -236,6 +237,16 @@ export default function SellerApprovalDetailPage() {
     isValidWebUrl(o.panImageUrl) ||
     isValidWebUrl(o.panCardUrl) ||
     isValidWebUrl(o.panUrl);
+
+  const selfieDoc = findDocument('SELFIE');
+  const selfieUrl =
+    isValidWebUrl(selfieDoc?.fileUrl) ||
+    isValidWebUrl(o.kycSelfieUri) ||
+    isValidWebUrl(o.selfieUrl) ||
+    isValidWebUrl(o.sellerSelfieUrl) ||
+    isValidWebUrl((seller as any)?.photoURL) ||
+    isValidWebUrl((seller as any)?.selfieUrl) ||
+    isValidWebUrl((seller as any)?.selfie);
 
   // Find all documents matching Aadhaar
   const allAadhaarDocs = documents.filter((d) => {
@@ -575,27 +586,123 @@ export default function SellerApprovalDetailPage() {
         </CardHeader>
         <CardContent className="pt-4">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {/* 1. Owner Profile */}
+            {/* 1. Owner Profile & Live Selfie */}
             <div className="space-y-3 rounded-lg border p-4 bg-muted/10">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-                Owner Profile
-              </h4>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-xs text-muted-foreground block">Full Legal Name</span>
-                  <span className="font-semibold text-foreground">{String(o.fullName || '—')}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground block">Mobile Number</span>
-                  <span className="font-medium text-foreground">{String(o.mobileNumber || '—')}</span>
-                </div>
-                {o.email ? (
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Email</span>
-                    <span className="font-medium text-foreground">{String(o.email)}</span>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  Owner Profile
+                </h4>
+                {selfieUrl ? (
+                  <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Selfie Captured
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    Pending
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-start gap-3">
+                {selfieUrl ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewDoc({
+                        documentType: 'SELFIE',
+                        documentNumber: String(o.mobileNumber || 'Seller Selfie'),
+                        fileUrl: selfieUrl,
+                        fileName: 'Owner Live Selfie',
+                        verificationStatus: 'VERIFIED',
+                      })
+                    }
+                    className="group relative h-12 w-12 shrink-0 rounded-full overflow-hidden border-2 border-emerald-500 shadow-xs hover:opacity-90 transition bg-slate-100"
+                    title="Click to preview live selfie"
+                  >
+                    <img
+                      src={selfieUrl}
+                      alt={String(o.fullName || 'Seller')}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                      <Eye className="h-4 w-4 text-white" />
+                    </div>
+                  </button>
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted border border-border text-muted-foreground">
+                    <User className="h-6 w-6" />
                   </div>
-                ) : null}
+                )}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Full Legal Name</span>
+                    <span className="font-semibold text-foreground text-sm truncate block">{String(o.fullName || '—')}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Mobile Number</span>
+                    <span className="font-medium text-foreground text-xs block">{String(o.mobileNumber || '—')}</span>
+                  </div>
+                  {o.email ? (
+                    <div>
+                      <span className="text-xs text-muted-foreground block">Email</span>
+                      <span className="font-medium text-foreground text-xs truncate block">{String(o.email)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Uploaded Live Selfie Proof */}
+              <div className="pt-2 border-t border-border/60">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                  Uploaded Document Proof
+                </span>
+                {selfieUrl ? (
+                  <div className="bg-background p-2 rounded border space-y-1.5 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-muted-foreground">Live Selfie</span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-semibold border border-emerald-200">
+                        Captured
+                      </span>
+                    </div>
+                    <div className="relative aspect-[1.3] w-full rounded overflow-hidden border bg-slate-900">
+                      <img
+                        src={selfieUrl}
+                        alt="Seller Live Selfie"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[11px] w-full gap-1 border-amber-300 text-amber-900 hover:bg-amber-50"
+                      onClick={() =>
+                        setPreviewDoc({
+                          documentType: 'SELFIE',
+                          documentNumber: String(o.mobileNumber || 'Live Selfie'),
+                          fileUrl: selfieUrl,
+                          fileName: 'Owner Live Selfie',
+                          verificationStatus: 'VERIFIED',
+                        })
+                      }
+                    >
+                      <Eye className="h-3 w-3" />
+                      Preview Selfie
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 p-2 rounded bg-amber-50/80 border border-amber-200 text-amber-900 text-xs">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span>No selfie photo uploaded</span>
+                  </div>
+                )}
               </div>
             </div>
 

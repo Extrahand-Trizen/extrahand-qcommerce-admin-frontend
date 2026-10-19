@@ -230,6 +230,7 @@ export const BACKEND_TYPE_TO_LABEL: Record<string, string> = {
   BANK_PASSBOOK: 'Bank Passbook / Cancelled Cheque',
   PAN_CARD: 'PAN Card Copy',
   AADHAAR_CARD: 'Aadhaar Card Copy',
+  SELFIE: 'Live Selfie Photo',
 };
 
 export function getDocumentLabel(type: string): string {

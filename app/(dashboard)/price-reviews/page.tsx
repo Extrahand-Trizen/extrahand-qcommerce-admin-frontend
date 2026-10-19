@@ -179,32 +179,51 @@ export default function PriceReviewsPage() {
 
   // Helper to compute attribute diffs
   const getAttributeDiffs = (item: SellerListing) => {
+    if (!item.pendingAttributes || item.pendingAttributes.length === 0) return [];
     const liveAttrs = item.customAttributes || item.masterProductId?.attributes || [];
-    const pendingAttrs = item.pendingAttributes || [];
+    const pendingAttrs = item.pendingAttributes;
 
     const liveMap = new Map<string, string>();
     liveAttrs.forEach((a) => {
       const key = (a.label || a.attributeId || '').trim();
-      if (key) liveMap.set(key, String(a.value ?? '').trim());
+      if (key) liveMap.set(key.toLowerCase(), String(a.value ?? '').trim());
     });
 
-    const pendingMap = new Map<string, string>();
+    const diffs: Array<{ key: string; liveVal: string; pendingVal: string; status: 'Added' | 'Changed' }> = [];
+
     pendingAttrs.forEach((a) => {
-      const key = (a.label || a.attributeId || '').trim();
-      if (key) pendingMap.set(key, String(a.value ?? '').trim());
+      const label = (a.label || a.attributeId || '').trim();
+      if (!label) return;
+      const keyLower = label.toLowerCase();
+      const liveVal = liveMap.get(keyLower);
+      const pendingVal = String(a.value ?? '').trim();
+
+      if (liveVal === undefined) {
+        diffs.push({ key: label, liveVal: '—', pendingVal, status: 'Added' });
+      } else if (liveVal !== pendingVal) {
+        diffs.push({ key: label, liveVal, pendingVal, status: 'Changed' });
+      }
     });
 
-    const allKeys = Array.from(new Set([...Array.from(liveMap.keys()), ...Array.from(pendingMap.keys())]));
-    return allKeys.map((key) => {
-      const liveVal = liveMap.get(key);
-      const pendingVal = pendingMap.get(key);
-      let status: 'Added' | 'Changed' | 'Removed' | 'Unchanged' = 'Unchanged';
-      if (liveVal === undefined && pendingVal !== undefined) status = 'Added';
-      else if (liveVal !== undefined && pendingVal === undefined) status = 'Removed';
-      else if (liveVal !== pendingVal) status = 'Changed';
+    return diffs;
+  };
 
-      return { key, liveVal: liveVal ?? '—', pendingVal: pendingVal ?? '—', status };
-    });
+  // Helper to compute specifications diffs
+  const getSpecsDiffs = (item: SellerListing) => {
+    if (!item.pendingProductInformation || Object.keys(item.pendingProductInformation).length === 0) return [];
+    const currentInfo = item.customProductInformation || item.masterProductId?.productInformation || {};
+    const diffs: Array<{ key: string; label: string; liveVal: string; pendingVal: string }> = [];
+
+    for (const [k, v] of Object.entries(item.pendingProductInformation)) {
+      if (v === undefined || v === null) continue;
+      const liveVal = currentInfo[k] != null ? String(currentInfo[k]).trim() : '';
+      const pendingVal = String(v).trim();
+      if (pendingVal !== '' && pendingVal !== liveVal) {
+        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        diffs.push({ key: k, label, liveVal: liveVal || '—', pendingVal });
+      }
+    }
+    return diffs;
   };
 
   return (
@@ -341,22 +360,29 @@ export default function PriceReviewsPage() {
               />
             ) : (
               filteredItems.map((item) => {
-                const currentPrice = item.sellingPricePaise ? item.sellingPricePaise / 100 : 0;
-                const currentUnit = item.unit || item.masterProductId?.packOrSoldAs || item.masterProductId?.variant || 'Standard';
+                const currentPricePaise = item.sellingPricePaise ?? 0;
+                const currentPrice = currentPricePaise / 100;
+                const currentUnit = (item.unit || item.masterProductId?.packOrSoldAs || item.masterProductId?.variant || 'Standard').trim();
 
-                const requestedPrice = item.pendingSellingPricePaise != null
-                  ? item.pendingSellingPricePaise / 100
-                  : null;
-                const requestedUnit = item.pendingUnit || null;
-                const isUnitChanged = requestedUnit != null && requestedUnit !== currentUnit;
-                const priceDiff = requestedPrice != null ? requestedPrice - currentPrice : 0;
+                const isPriceChanged = item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== currentPricePaise;
+                const isUnitChanged = Boolean(item.pendingUnit && item.pendingUnit.trim() !== currentUnit);
+
+                const currentDesc = (item.customDescription || item.masterProductId?.description || '').trim();
+                const pendingDesc = (item.pendingDescription || '').trim();
+                const isDescChanged = Boolean(pendingDesc && pendingDesc !== currentDesc);
+
+                const currentNotes = (item.customNotes || '').trim();
+                const pendingNotes = (item.pendingNotes || '').trim();
+                const isNotesChanged = Boolean(pendingNotes && pendingNotes !== currentNotes);
+
+                const attrDiffs = getAttributeDiffs(item);
+                const isAttributesChanged = attrDiffs.length > 0;
+
+                const specsDiffs = getSpecsDiffs(item);
+                const isSpecsChanged = specsDiffs.length > 0;
+
+                const hasAnyPending = isPriceChanged || isUnitChanged || isAttributesChanged || isDescChanged || isNotesChanged || isSpecsChanged;
                 const isUnderReview = item.reviewStatus === 'UNDER_REVIEW';
-
-                const hasPendingAttributes = Boolean(item.pendingAttributes && item.pendingAttributes.length > 0);
-                const hasPendingDesc = Boolean(item.pendingDescription);
-                const hasPendingNotes = Boolean(item.pendingNotes);
-                const hasPendingInfo = Boolean(item.pendingProductInformation && Object.keys(item.pendingProductInformation).length > 0);
-                const hasAnyPending = requestedPrice != null || isUnitChanged || hasPendingAttributes || hasPendingDesc || hasPendingNotes || hasPendingInfo;
 
                 const shopName = item.sellerId?.shopName || item.sellerId?.storeName || item.sellerId?.fullName || 'Seller';
                 const productName = item.masterProductId?.name || 'Product';
@@ -410,44 +436,44 @@ export default function PriceReviewsPage() {
                       </div>
                     </TableCell>
 
-                    {/* Requested Changes (Price, Unit, Attributes, Description, Notes) */}
+                    {/* Requested Changes (Field Names Only - No Values) */}
                     <TableCell>
                       <div className="flex flex-col gap-1.5">
                         {hasAnyPending ? (
                           <div className="flex flex-wrap gap-1">
-                            {requestedPrice != null && (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-900">
-                                Price: ₹{requestedPrice.toFixed(2)}
+                            {isPriceChanged && (
+                              <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                                Price
                               </span>
                             )}
                             {isUnitChanged && (
-                              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-bold text-blue-900">
-                                Unit: {requestedUnit}
+                              <span className="rounded bg-blue-100 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-900">
+                                Unit
                               </span>
                             )}
-                            {hasPendingAttributes && (
-                              <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[11px] font-bold text-purple-900 flex items-center gap-1">
-                                <Tag className="h-3 w-3" /> Attributes Changed
+                            {isAttributesChanged && (
+                              <span className="rounded bg-purple-100 border border-purple-200 px-2 py-0.5 text-[11px] font-semibold text-purple-900">
+                                Attributes
                               </span>
                             )}
-                            {hasPendingDesc && (
-                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-900 flex items-center gap-1">
-                                <Info className="h-3 w-3" /> Description Changed
+                            {isDescChanged && (
+                              <span className="rounded bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+                                Description
                               </span>
                             )}
-                            {hasPendingNotes && (
-                              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[11px] font-bold text-indigo-900 flex items-center gap-1">
-                                <MessageSquare className="h-3 w-3" /> Notes Changed
+                            {isNotesChanged && (
+                              <span className="rounded bg-indigo-100 border border-indigo-200 px-2 py-0.5 text-[11px] font-semibold text-indigo-900">
+                                Notes
                               </span>
                             )}
-                            {hasPendingInfo && (
-                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-900 flex items-center gap-1">
-                                <Clock className="h-3 w-3" /> Specs Changed
+                            {isSpecsChanged && (
+                              <span className="rounded bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-900">
+                                Specifications
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">No pending changes</span>
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
 
                         {!isUnderReview && item.rejectionReason && (
@@ -573,142 +599,181 @@ export default function PriceReviewsPage() {
               </button>
             </div>
 
-            {/* Price & Unit Diff */}
-            {(viewChangesItem.pendingSellingPricePaise != null || (viewChangesItem.pendingUnit && viewChangesItem.pendingUnit !== viewChangesItem.unit)) && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                  <Layers className="h-4 w-4 text-amber-700" /> Price & Pack Unit Change
-                </h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-xs text-slate-500 block">Existing Approved</span>
-                    <span className="font-semibold text-slate-900">
-                      ₹{viewChangesItem.sellingPricePaise ? (viewChangesItem.sellingPricePaise / 100).toFixed(2) : '0.00'}
-                    </span>
-                    <span className="text-xs text-slate-500 ml-2">({viewChangesItem.unit || 'Standard'})</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500 block">Seller Changed To</span>
-                    <span className="font-bold text-amber-800">
-                      ₹{viewChangesItem.pendingSellingPricePaise != null ? (viewChangesItem.pendingSellingPricePaise / 100).toFixed(2) : (viewChangesItem.sellingPricePaise / 100).toFixed(2)}
-                    </span>
-                    <span className="text-xs text-amber-800 font-bold ml-2">({viewChangesItem.pendingUnit || viewChangesItem.unit || 'Standard'})</span>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Price & Unit Diff - Only show if actually changed */}
+            {(() => {
+              const livePricePaise = viewChangesItem.sellingPricePaise ?? 0;
+              const hasPriceDiff = viewChangesItem.pendingSellingPricePaise != null && viewChangesItem.pendingSellingPricePaise !== livePricePaise;
+              const liveUnit = (viewChangesItem.unit || viewChangesItem.masterProductId?.packOrSoldAs || viewChangesItem.masterProductId?.variant || 'Standard').trim();
+              const hasUnitDiff = Boolean(viewChangesItem.pendingUnit && viewChangesItem.pendingUnit.trim() !== liveUnit);
 
-            {/* Attribute Comparison View */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Tag className="h-4 w-4 text-purple-600" /> Product Attributes Comparison
-              </h4>
-              <div className="rounded-lg border border-border overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 border-b border-border text-slate-600 uppercase font-bold">
-                    <tr>
-                      <th className="p-2.5">Attribute Name</th>
-                      <th className="p-2.5">Previous Approved Value</th>
-                      <th className="p-2.5">Seller Changed To</th>
-                      <th className="p-2.5 text-right">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {getAttributeDiffs(viewChangesItem).length > 0 ? (
-                      getAttributeDiffs(viewChangesItem).map((diff, idx) => (
-                        <tr key={diff.key + idx} className={diff.status !== 'Unchanged' ? 'bg-amber-50/40 font-medium' : ''}>
-                          <td className="p-2.5 font-bold text-slate-800">{diff.key}</td>
-                          <td className="p-2.5 text-slate-600 line-through">{diff.liveVal}</td>
-                          <td className="p-2.5 font-bold text-slate-900">{diff.pendingVal}</td>
-                          <td className="p-2.5 text-right">
-                            <span
-                              className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                                diff.status === 'Changed'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : diff.status === 'Added'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : diff.status === 'Removed'
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {diff.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} className="p-3 text-center text-slate-400 italic">
-                          No product attributes defined.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+              if (!hasPriceDiff && !hasUnitDiff) return null;
 
-            {/* Product Description Diff */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Info className="h-4 w-4 text-emerald-600" /> Product Description Comparison
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Description</span>
-                  <p className="text-xs text-slate-700 whitespace-pre-wrap">
-                    {viewChangesItem.customDescription || viewChangesItem.masterProductId?.description || 'No description provided'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-                  <span className="text-xs font-bold text-amber-900 uppercase block mb-1">Seller Changed To</span>
-                  <p className="text-xs text-amber-950 font-medium whitespace-pre-wrap">
-                    {viewChangesItem.pendingDescription ?? (viewChangesItem.customDescription || viewChangesItem.masterProductId?.description || 'No change')}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Seller Notes Diff */}
-            {(viewChangesItem.pendingNotes || viewChangesItem.customNotes) && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <MessageSquare className="h-4 w-4 text-indigo-600" /> Seller Notes Comparison
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Notes</span>
-                    <p className="text-xs text-slate-700 whitespace-pre-wrap">
-                      {viewChangesItem.customNotes || 'None'}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
-                    <span className="text-xs font-bold text-indigo-900 uppercase block mb-1">Seller Changed To</span>
-                    <p className="text-xs text-indigo-950 font-medium whitespace-pre-wrap">
-                      {viewChangesItem.pendingNotes ?? viewChangesItem.customNotes ?? 'No change'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Specifications & Product Information */}
-            {viewChangesItem.pendingProductInformation && Object.keys(viewChangesItem.pendingProductInformation).length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-amber-600" /> Specifications & Product Information
-                </h4>
-                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs space-y-1.5">
-                  {Object.entries(viewChangesItem.pendingProductInformation).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between border-b border-amber-100 pb-1">
-                      <span className="font-semibold text-slate-700 capitalize">{k.replace(/([A-Z])/g, ' $1')}:</span>
-                      <span className="font-bold text-slate-900">{String(v)}</span>
+              return (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                    <Layers className="h-4 w-4 text-amber-700" /> Price &amp; Pack Unit Change
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-xs text-slate-500 block">Existing Approved</span>
+                      <span className="font-semibold text-slate-900">
+                        ₹{(livePricePaise / 100).toFixed(2)}
+                      </span>
+                      <span className="text-xs text-slate-500 ml-2">({liveUnit})</span>
                     </div>
-                  ))}
+                    <div>
+                      <span className="text-xs text-slate-500 block">Seller Changed To</span>
+                      <span className={`font-bold ${hasPriceDiff ? 'text-amber-900' : 'text-slate-900'}`}>
+                        ₹{hasPriceDiff ? (viewChangesItem.pendingSellingPricePaise! / 100).toFixed(2) : (livePricePaise / 100).toFixed(2)}
+                      </span>
+                      <span className={`text-xs ml-2 ${hasUnitDiff ? 'font-bold text-amber-900' : 'text-slate-500'}`}>
+                        ({hasUnitDiff ? viewChangesItem.pendingUnit : liveUnit})
+                      </span>
+                      {hasPriceDiff && (
+                        <span className="ml-2 text-xs font-semibold text-amber-800">
+                          ({viewChangesItem.pendingSellingPricePaise! > livePricePaise ? '+' : ''}
+                          ₹{((viewChangesItem.pendingSellingPricePaise! - livePricePaise) / 100).toFixed(2)})
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
+
+            {/* Attribute Comparison View - Only show if actually changed */}
+            {(() => {
+              const diffs = getAttributeDiffs(viewChangesItem);
+              if (diffs.length === 0) return null;
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Tag className="h-4 w-4 text-purple-600" /> Product Attributes Comparison
+                  </h4>
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-border text-slate-600 uppercase font-bold">
+                        <tr>
+                          <th className="p-2.5">Attribute Name</th>
+                          <th className="p-2.5">Previous Approved Value</th>
+                          <th className="p-2.5">Seller Changed To</th>
+                          <th className="p-2.5 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {diffs.map((diff, idx) => (
+                          <tr key={diff.key + idx} className="bg-purple-50/30 font-medium">
+                            <td className="p-2.5 font-bold text-slate-800">{diff.key}</td>
+                            <td className="p-2.5 text-slate-600 line-through">{diff.liveVal}</td>
+                            <td className="p-2.5 font-bold text-slate-900">{diff.pendingVal}</td>
+                            <td className="p-2.5 text-right">
+                              <span
+                                className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                                  diff.status === 'Changed'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {diff.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Product Description Diff - Only show if actually changed */}
+            {(() => {
+              const liveDesc = (viewChangesItem.customDescription || viewChangesItem.masterProductId?.description || '').trim();
+              const pendDesc = (viewChangesItem.pendingDescription || '').trim();
+              if (!pendDesc || pendDesc === liveDesc) return null;
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Info className="h-4 w-4 text-emerald-600" /> Product Description Comparison
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Description</span>
+                      <p className="text-xs text-slate-700 whitespace-pre-wrap">
+                        {liveDesc || 'No description provided'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-emerald-300 bg-emerald-50/40 p-3">
+                      <span className="text-xs font-bold text-emerald-900 uppercase block mb-1">Seller Changed To</span>
+                      <p className="text-xs text-slate-900 font-medium whitespace-pre-wrap">
+                        {pendDesc}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Seller Notes Diff - Only show if actually changed */}
+            {(() => {
+              const liveNotes = (viewChangesItem.customNotes || '').trim();
+              const pendNotes = (viewChangesItem.pendingNotes || '').trim();
+              if (!pendNotes || pendNotes === liveNotes) return null;
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <MessageSquare className="h-4 w-4 text-indigo-600" /> Seller Notes Comparison
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Notes</span>
+                      <p className="text-xs text-slate-700 whitespace-pre-wrap">
+                        {liveNotes || 'None'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
+                      <span className="text-xs font-bold text-indigo-900 uppercase block mb-1">Seller Changed To</span>
+                      <p className="text-xs text-indigo-950 font-medium whitespace-pre-wrap">
+                        {pendNotes}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Specifications & Product Information - Only show if actually changed */}
+            {(() => {
+              const specs = getSpecsDiffs(viewChangesItem);
+              if (specs.length === 0) return null;
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Clock className="h-4 w-4 text-amber-600" /> Specifications &amp; Product Information Comparison
+                  </h4>
+                  <div className="rounded-lg border border-border overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 border-b border-border text-slate-600 uppercase font-bold">
+                        <tr>
+                          <th className="p-2.5">Specification</th>
+                          <th className="p-2.5">Previous Approved Value</th>
+                          <th className="p-2.5">Seller Changed To</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {specs.map((spec) => (
+                          <tr key={spec.key} className="bg-amber-50/30 font-medium">
+                            <td className="p-2.5 font-bold text-slate-800">{spec.label}</td>
+                            <td className="p-2.5 text-slate-600 line-through">{spec.liveVal}</td>
+                            <td className="p-2.5 font-bold text-slate-900">{spec.pendingVal}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Modal Footer Actions */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">

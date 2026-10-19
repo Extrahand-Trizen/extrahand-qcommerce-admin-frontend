@@ -41,10 +41,22 @@ export function DocumentPreviewDialog({
   const [zoom, setZoom] = useState(1);
   const [loadError, setLoadError] = useState(false);
 
+  React.useEffect(() => {
+    setLoadError(false);
+    setZoom(1);
+  }, [document?.fileUrl, open]);
+
   if (!document) return null;
 
   const title = getDocumentLabel(document.documentType);
   const fileUrl = document.fileUrl ? String(document.fileUrl) : '';
+  const isLocalDeviceUri = Boolean(
+    fileUrl &&
+      (fileUrl.startsWith('file://') ||
+        fileUrl.startsWith('content://') ||
+        fileUrl.startsWith('ph://') ||
+        fileUrl.startsWith('/data/user/'))
+  );
   const cleanUrl = fileUrl.split('?')[0].split('#')[0];
   const isPdf =
     Boolean(cleanUrl && cleanUrl.toLowerCase().endsWith('.pdf')) ||
@@ -70,6 +82,8 @@ export function DocumentPreviewDialog({
           'CANCELLED_CHEQUE',
           'CHEQUE',
           'STORE_FRONT',
+          'SELFIE',
+          'LIVE_SELFIE',
         ].includes(String(document.documentType).toUpperCase())
     );
 
@@ -157,6 +171,17 @@ export function DocumentPreviewDialog({
                   ? `Only document number (${document.documentNumber}) was provided.`
                   : 'This document has not been uploaded yet.'}
               </p>
+            </div>
+          ) : isLocalDeviceUri ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center text-amber-900 max-w-md mx-auto">
+              <AlertCircle className="h-10 w-10 text-amber-600 mb-2" />
+              <p className="text-sm font-semibold">Local Device Path Not Available</p>
+              <p className="text-xs text-muted-foreground mt-1 mb-2">
+                This document was referenced as a local mobile device path on the seller's phone and was not uploaded to cloud storage.
+              </p>
+              <span className="font-mono text-[11px] bg-muted px-2 py-1 rounded border text-muted-foreground break-all">
+                {fileUrl}
+              </span>
             </div>
           ) : loadError ? (
             <div className="flex flex-col items-center justify-center p-8 text-center text-amber-800">

@@ -357,6 +357,11 @@ export default function SellerStoresPage() {
                             <span className="hidden sm:inline text-slate-500">{store.city}</span>
                           </>
                         )}
+                        <span>&middot;</span>
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                          <Package className="h-3 w-3 text-slate-400" />
+                          {store.productCount ?? 0} {store.productCount === 1 ? 'product' : 'products'}
+                        </span>
                       </div>
                     </div>
 
