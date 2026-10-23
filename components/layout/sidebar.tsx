@@ -142,11 +142,11 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
       {open && <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={onClose} />}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-white transition-transform duration-200 lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-[#F1E8D5] bg-[#FFFDF7] transition-transform duration-200 lg:static lg:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b border-border px-3">
+        <div className="flex h-14 items-center justify-between border-b border-[#F1E8D5] px-3">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5" onClick={onClose}>
             <Image
               src="/logo.png"
@@ -176,8 +176,8 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
                   <button
                     onClick={() => setExpanded((e) => ({ ...e, [item.name]: !e[item.name] }))}
                     className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium',
-                      isActive ? 'text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors',
+                      isActive ? 'text-slate-900 font-semibold' : 'text-slate-600 hover:bg-[#FEF9C3]/50 hover:text-slate-900'
                     )}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
@@ -185,7 +185,7 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
                     {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                   </button>
                   {isOpen && (
-                    <div className="mb-1 ml-3 space-y-0.5 border-l border-border pl-2">
+                    <div className="mb-1 ml-3 space-y-0.5 border-l border-[#F1E8D5] pl-2">
                       {item.children.map((child) => {
                         const childActive = pathname === child.href || pathname?.startsWith(child.href + '/');
                         return (
@@ -194,10 +194,10 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
                             href={child.href}
                             onClick={onClose}
                             className={cn(
-                              'block rounded-md px-2.5 py-1.5 text-[13px]',
+                              'block rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
                               childActive
-                                ? 'bg-amber-50 font-medium text-amber-900'
-                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                ? 'bg-[#FEF08A] font-semibold text-slate-900 shadow-xs'
+                                : 'text-slate-600 hover:bg-[#FEF9C3]/50 hover:text-slate-900'
                             )}
                           >
                             {child.name}
@@ -216,8 +216,8 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
                 href={item.href || '#'}
                 onClick={onClose}
                 className={cn(
-                  'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium',
-                  linkActive ? 'bg-amber-50 text-amber-900' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  'flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors',
+                  linkActive ? 'bg-[#FEF08A] text-slate-900 font-semibold shadow-xs' : 'text-slate-600 hover:bg-[#FEF9C3]/50 hover:text-slate-900'
                 )}
               >
                 <item.icon className="h-4 w-4" />

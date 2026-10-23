@@ -190,7 +190,7 @@ export default function SellerStoreDetailPage() {
 
   /* ---------------- QUERIES ---------------- */
 
-  // 1. Store Details
+  // 1. Store Details (always enabled, powers overview and header)
   const { data: storeDetail, isLoading: detailLoading } = useQuery({
     queryKey: ['seller-detail', id],
     queryFn: async () => {
@@ -201,15 +201,19 @@ export default function SellerStoreDetailPage() {
       }>(`${endpoints.sellers}/${id}`);
       return res.data!;
     },
+    enabled: !!id,
+    staleTime: 60_000,
   });
 
-  // 2. Store Categories (for products tab)
+  // 2. Store Categories (for products tab pills)
   const { data: categories = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ['seller-store-categories', id],
     queryFn: async () => {
       const res = await api<StoreCategory[]>(endpoints.sellerStoreCategories(id));
       return res.data || [];
     },
+    enabled: !!id && activeTab === 'products',
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -223,7 +227,7 @@ export default function SellerStoreDetailPage() {
     });
   }, [categories]);
 
-  // 3. Products in Store
+  // 3. Products in Store (heavy 100-item table, only when on products tab)
   const { data: productsPage, isLoading: productsLoading } = useQuery({
     queryKey: ['seller-store-products', id, selectedCategoryId, productSearch],
     queryFn: async () => {
@@ -235,9 +239,11 @@ export default function SellerStoreDetailPage() {
       );
       return res.data || { items: [], total: 0 };
     },
+    enabled: !!id && activeTab === 'products',
+    staleTime: 30_000,
   });
 
-  // 3a. Total Products in Store (store-wide count, unaffected by selected category or search)
+  // 3a. Total Products in Store (fast limit=1 count query, always enabled for badge and overview metric)
   const { data: storeProductCountData } = useQuery({
     queryKey: ['seller-store-total-products-count', id],
     queryFn: async () => {
@@ -246,9 +252,11 @@ export default function SellerStoreDetailPage() {
       );
       return res.data?.total ?? 0;
     },
+    enabled: !!id,
+    staleTime: 60_000,
   });
 
-  // 4. Custom Product Submissions for this shop
+  // 4. Custom Product Submissions for this shop (powers custom requests tab, pending review tab, and overview pending badge)
   const { data: customSubmissions = [], isLoading: customLoading } = useQuery({
     queryKey: ['shop-custom-submissions', id, customStatusFilter, customSearch],
     queryFn: async () => {
@@ -258,9 +266,11 @@ export default function SellerStoreDetailPage() {
       const res = await api<{ items: ProductSubmissionItem[] }>(`${endpoints.productSubmissions}?${p}`);
       return res.data?.items || [];
     },
+    enabled: !!id,
+    staleTime: 30_000,
   });
 
-  // 5. Price & Unit Reviews for this shop
+  // 5. Price & Unit Reviews for this shop (powers price changes tab, pending review tab, and overview pending badge)
   const { data: priceReviewsData, isLoading: priceReviewsLoading } = useQuery({
     queryKey: ['shop-price-reviews', id, priceStatusFilter],
     queryFn: async () => {
@@ -271,9 +281,11 @@ export default function SellerStoreDetailPage() {
       );
       return res.data || { items: [], total: 0 };
     },
+    enabled: !!id,
+    staleTime: 30_000,
   });
 
-  // 6. Shop Orders
+  // 6. Shop Orders (powers orders tab and overview delivered orders metric)
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['shop-orders', id, orderStatusFilter, orderSearch],
     queryFn: async () => {
@@ -285,31 +297,39 @@ export default function SellerStoreDetailPage() {
       );
       return res.data || { items: [], total: 0 };
     },
+    enabled: !!id,
+    staleTime: 30_000,
   });
 
-  // 7. Shop Financial Summary & Payouts
-  const { data: financialSummary } = useQuery({
+  // 7. Shop Financial Summary & Payouts (deferred to payouts tab to eliminate synchronous ledger reconciliation on initial mount)
+  const { data: financialSummary, isLoading: financialLoading } = useQuery({
     queryKey: ['shop-financial-summary', id],
     queryFn: async () => {
       const res = await api<FinancialSummary>(endpoints.sellerFinancialSummary(id));
       return res.data || {};
     },
+    enabled: !!id && activeTab === 'payouts',
+    staleTime: 60_000,
   });
 
-  const { data: payoutsList = [] } = useQuery({
+  const { data: payoutsList = [], isLoading: payoutsLoading } = useQuery({
     queryKey: ['shop-payouts', id],
     queryFn: async () => {
       const res = await api<{ items: Array<Record<string, any>> }>(endpoints.sellerPayoutsById(id));
       return res.data?.items || [];
     },
+    enabled: !!id && activeTab === 'payouts',
+    staleTime: 60_000,
   });
 
-  const { data: settlementsList = [] } = useQuery({
+  const { data: settlementsList = [], isLoading: settlementsLoading } = useQuery({
     queryKey: ['shop-settlements', id],
     queryFn: async () => {
       const res = await api<{ items: Array<Record<string, any>> }>(endpoints.sellerSettlementsById(id));
       return res.data?.items || [];
     },
+    enabled: !!id && activeTab === 'payouts',
+    staleTime: 60_000,
   });
 
   /* ---------------- MUTATIONS ---------------- */
@@ -1176,13 +1196,13 @@ export default function SellerStoreDetailPage() {
                                   Price
                                 </span>
                               )}
-                              {item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard') && (
+                              {item.pendingUnit && item.pendingUnit.trim().toLowerCase() !== (item.unit || item.masterProductId?.variant || 'Standard').trim().toLowerCase() && (
                                 <span className="rounded bg-blue-100 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-900">
                                   Unit
                                 </span>
                               )}
                               {!(item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== item.sellingPricePaise) &&
-                               !(item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard')) && (
+                               !(item.pendingUnit && item.pendingUnit.trim().toLowerCase() !== (item.unit || item.masterProductId?.variant || 'Standard').trim().toLowerCase()) && (
                                 <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </div>
@@ -1427,13 +1447,13 @@ export default function SellerStoreDetailPage() {
                               Price
                             </span>
                           )}
-                          {item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard') && (
+                          {item.pendingUnit && item.pendingUnit.trim().toLowerCase() !== (item.unit || item.masterProductId?.variant || 'Standard').trim().toLowerCase() && (
                             <span className="rounded bg-blue-100 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-900">
                               Unit
                             </span>
                           )}
                           {!(item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== item.sellingPricePaise) &&
-                           !(item.pendingUnit && item.pendingUnit !== (item.unit || item.masterProductId?.variant || 'Standard')) && (
+                           !(item.pendingUnit && item.pendingUnit.trim().toLowerCase() !== (item.unit || item.masterProductId?.variant || 'Standard').trim().toLowerCase()) && (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </div>
@@ -1597,9 +1617,13 @@ export default function SellerStoreDetailPage() {
                 <p className="text-xs font-medium text-muted-foreground">Wallet Balance</p>
                 <DollarSign className="h-4 w-4 text-emerald-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-slate-900">
-                ₹{((financialSummary?.walletBalanceRupees ?? ((financialSummary?.walletBalancePaise ?? 0) / 100)) || 0).toFixed(2)}
-              </p>
+              {financialLoading ? (
+                <Skeleton className="mt-2 h-8 w-24" />
+              ) : (
+                <p className="mt-2 text-2xl font-bold text-slate-900">
+                  ₹{((financialSummary?.walletBalanceRupees ?? ((financialSummary?.walletBalancePaise ?? 0) / 100)) || 0).toFixed(2)}
+                </p>
+              )}
             </div>
 
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
@@ -1607,9 +1631,13 @@ export default function SellerStoreDetailPage() {
                 <p className="text-xs font-medium text-muted-foreground">Pending Payouts</p>
                 <Clock className="h-4 w-4 text-amber-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-amber-700">
-                ₹{((financialSummary?.pendingPayoutsRupees ?? ((financialSummary?.pendingPayoutsPaise ?? 0) / 100)) || 0).toFixed(2)}
-              </p>
+              {financialLoading ? (
+                <Skeleton className="mt-2 h-8 w-24" />
+              ) : (
+                <p className="mt-2 text-2xl font-bold text-amber-700">
+                  ₹{((financialSummary?.pendingPayoutsRupees ?? ((financialSummary?.pendingPayoutsPaise ?? 0) / 100)) || 0).toFixed(2)}
+                </p>
+              )}
             </div>
 
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
@@ -1617,9 +1645,13 @@ export default function SellerStoreDetailPage() {
                 <p className="text-xs font-medium text-muted-foreground">Total Lifetime Earnings</p>
                 <CreditCard className="h-4 w-4 text-blue-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-slate-900">
-                ₹{((financialSummary?.totalEarningsRupees ?? ((financialSummary?.totalEarningsPaise ?? 0) / 100)) || 0).toFixed(2)}
-              </p>
+              {financialLoading ? (
+                <Skeleton className="mt-2 h-8 w-24" />
+              ) : (
+                <p className="mt-2 text-2xl font-bold text-slate-900">
+                  ₹{((financialSummary?.totalEarningsRupees ?? ((financialSummary?.totalEarningsPaise ?? 0) / 100)) || 0).toFixed(2)}
+                </p>
+              )}
             </div>
 
             <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
@@ -1627,9 +1659,13 @@ export default function SellerStoreDetailPage() {
                 <p className="text-xs font-medium text-muted-foreground">Delivered Orders</p>
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-slate-900">
-                {financialSummary?.deliveredOrdersCount ?? 0}
-              </p>
+              {financialLoading ? (
+                <Skeleton className="mt-2 h-8 w-16" />
+              ) : (
+                <p className="mt-2 text-2xl font-bold text-slate-900">
+                  {financialSummary?.deliveredOrdersCount ?? 0}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1651,7 +1687,9 @@ export default function SellerStoreDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!payoutsList.length ? (
+                  {payoutsLoading ? (
+                    <TableLoadingRows cols={5} />
+                  ) : !payoutsList.length ? (
                     <TableEmptyRow cols={5} message="No payout transfers recorded for this shop yet" />
                   ) : (
                     payoutsList.map((payout: any) => (
@@ -1697,7 +1735,9 @@ export default function SellerStoreDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!settlementsList.length ? (
+                  {settlementsLoading ? (
+                    <TableLoadingRows cols={5} />
+                  ) : !settlementsList.length ? (
                     <TableEmptyRow cols={5} message="No settlements logged for this shop" />
                   ) : (
                     settlementsList.map((st: any) => (
@@ -1797,9 +1837,9 @@ export default function SellerStoreDetailPage() {
             ? ((priceDiff / livePrice) * 100).toFixed(1)
             : null;
         const liveUnit =
-          viewChangesItem.unit || viewChangesItem.masterProductId?.variant || 'Standard';
-        const pendingUnit = viewChangesItem.pendingUnit;
-        const isUnitChanged = Boolean(pendingUnit && pendingUnit !== liveUnit);
+          (viewChangesItem.unit || viewChangesItem.masterProductId?.variant || 'Standard').trim();
+        const pendingUnit = (viewChangesItem.pendingUnit || '').trim();
+        const isUnitChanged = Boolean(pendingUnit && pendingUnit.toLowerCase() !== liveUnit.toLowerCase());
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">

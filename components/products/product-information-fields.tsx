@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { FormSection } from '@/components/shared/form-section';
 import { FormField } from '@/components/shared/form-field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export type NutritionInformationFormState = {
   servingSize: string;
@@ -26,6 +27,16 @@ export type ProductInformationFormState = {
   usageInstructions: string;
   allergens: string;
   nutrition: NutritionInformationFormState;
+  // Medical & Clinical Fields
+  genericName?: string;
+  dosageForm?: string;
+  routeOfAdmin?: string;
+  strength?: string;
+  prescriptionCategory?: string;
+  indication?: string;
+  sideEffects?: string;
+  coldChainRequired?: boolean;
+  prescriptionRequired?: boolean;
 };
 
 export const EMPTY_PRODUCT_INFORMATION: ProductInformationFormState = {
@@ -47,6 +58,15 @@ export const EMPTY_PRODUCT_INFORMATION: ProductInformationFormState = {
     sugar: '',
     sodium: '',
   },
+  genericName: '',
+  dosageForm: '',
+  routeOfAdmin: '',
+  strength: '',
+  prescriptionCategory: '',
+  indication: '',
+  sideEffects: '',
+  coldChainRequired: false,
+  prescriptionRequired: false,
 };
 
 type NutritionRecord = Record<string, unknown>;
@@ -77,6 +97,15 @@ export function productInformationFromApi(raw: unknown): ProductInformationFormS
       sugar: String(nutrition.sugar || ''),
       sodium: String(nutrition.sodium || ''),
     },
+    genericName: String(src.genericName || ''),
+    dosageForm: String(src.dosageForm || ''),
+    routeOfAdmin: String(src.routeOfAdmin || ''),
+    strength: String(src.strength || ''),
+    prescriptionCategory: String(src.prescriptionCategory || ''),
+    indication: String(src.indication || ''),
+    sideEffects: String(src.sideEffects || ''),
+    coldChainRequired: Boolean(src.coldChainRequired),
+    prescriptionRequired: Boolean(src.prescriptionRequired),
   };
 }
 
@@ -101,6 +130,15 @@ export function productInformationToPayload(state: ProductInformationFormState) 
       sugar: state.nutrition.sugar,
       sodium: state.nutrition.sodium,
     },
+    genericName: state.genericName || undefined,
+    dosageForm: state.dosageForm || undefined,
+    routeOfAdmin: state.routeOfAdmin || undefined,
+    strength: state.strength || undefined,
+    prescriptionCategory: state.prescriptionCategory || undefined,
+    indication: state.indication || undefined,
+    sideEffects: state.sideEffects || undefined,
+    coldChainRequired: Boolean(state.coldChainRequired),
+    prescriptionRequired: Boolean(state.prescriptionRequired),
   };
 }
 
@@ -110,20 +148,22 @@ interface ProductInformationFieldsProps {
   title?: string;
   description?: string;
   stepLabel?: string;
+  vertical?: 'KIRANA' | 'MEDICAL';
 }
 
 export function ProductInformationFields({
   value,
   onChange,
   title = 'Product Information',
-  description = 'Ingredients, manufacturer, storage, usage, nutrition, and allergens — separate from catalogue specifications.',
+  description = 'Detailed information separate from catalogue specifications.',
   stepLabel,
+  vertical = 'KIRANA',
 }: ProductInformationFieldsProps) {
   const sectionTitle = stepLabel ? `${stepLabel}. ${title}` : title;
 
   const setField = <K extends keyof Omit<ProductInformationFormState, 'nutrition'>>(
     field: K,
-    next: string,
+    next: ProductInformationFormState[K],
   ) => {
     onChange({ ...value, [field]: next });
   };
@@ -131,6 +171,177 @@ export function ProductInformationFields({
   const setNutrition = (field: keyof NutritionInformationFormState, next: string) => {
     onChange({ ...value, nutrition: { ...value.nutrition, [field]: next } });
   };
+
+  if (vertical === 'MEDICAL') {
+    return (
+      <FormSection
+        title={sectionTitle}
+        description="Clinical specifications, active ingredients, dosage form, schedule, and safety warnings."
+      >
+        <div className="grid gap-5 sm:grid-cols-2">
+          <FormField
+            label="Generic Name / Active Ingredient"
+            required
+            hint="Scientific / active pharmaceutical ingredient name (e.g. Paracetamol, Amoxicillin)."
+          >
+            <Input
+              placeholder="e.g. Paracetamol"
+              value={value.genericName || ''}
+              onChange={(e) => setField('genericName', e.target.value)}
+            />
+          </FormField>
+
+          <FormField
+            label="Dosage Form"
+            required
+            hint="Physical pharmaceutical form (e.g. Tablet, Capsule, Syrup, Ointment, Injection)."
+          >
+            <Input
+              placeholder="e.g. Tablet"
+              value={value.dosageForm || ''}
+              onChange={(e) => setField('dosageForm', e.target.value)}
+            />
+          </FormField>
+
+          <FormField
+            label="Strength / Concentration"
+            required
+            hint="Strength of active ingredient per unit (e.g. 500 mg, 10 mg/5 ml)."
+          >
+            <Input
+              placeholder="e.g. 650 mg"
+              value={value.strength || ''}
+              onChange={(e) => setField('strength', e.target.value)}
+            />
+          </FormField>
+
+          <FormField
+            label="Route of Administration"
+            hint="Route to administer (e.g. Oral, Topical, Intravenous, Ophthalmic)."
+          >
+            <Input
+              placeholder="e.g. Oral"
+              value={value.routeOfAdmin || ''}
+              onChange={(e) => setField('routeOfAdmin', e.target.value)}
+            />
+          </FormField>
+
+          <FormField
+            label="Prescription Category"
+            required
+            hint="Drug schedule / prescription requirement."
+          >
+            <Select
+              value={value.prescriptionCategory || undefined}
+              onValueChange={(v) => setField('prescriptionCategory', v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select prescription schedule" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Schedule H (Prescription Required)">Schedule H (Prescription Required)</SelectItem>
+                <SelectItem value="Schedule H1 (Strict Prescription & Register)">Schedule H1 (Strict Prescription & Register)</SelectItem>
+                <SelectItem value="Schedule X (Narcotics / Psychotropic)">Schedule X (Narcotics / Psychotropic)</SelectItem>
+                <SelectItem value="Schedule G (Medical Supervision)">Schedule G (Medical Supervision)</SelectItem>
+                <SelectItem value="OTC (Over The Counter / Non-Prescription)">OTC (Over The Counter / Non-Prescription)</SelectItem>
+                <SelectItem value="Ayurvedic / Herbal (Non-Scheduled)">Ayurvedic / Herbal (Non-Scheduled)</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
+
+          <FormField
+            label="Cold-Chain Required"
+            hint="Requires cold storage (2°C - 8°C), e.g. Insulin, Vaccines."
+          >
+            <div className="flex h-9 items-center gap-2">
+              <input
+                type="checkbox"
+                id="coldChainToggle"
+                checked={Boolean(value.coldChainRequired)}
+                onChange={(e) => setField('coldChainRequired', e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="coldChainToggle" className="text-sm font-medium text-foreground cursor-pointer">
+                Requires Cold-Chain Delivery (2°C – 8°C)
+              </label>
+            </div>
+          </FormField>
+
+          <FormField
+            label="Doctor Prescription Required"
+            hint="Customer must provide and verify a valid doctor's prescription at checkout."
+          >
+            <div className="flex h-9 items-center gap-2">
+              <input
+                type="checkbox"
+                id="prescriptionRequiredToggle"
+                checked={Boolean(value.prescriptionRequired)}
+                onChange={(e) => setField('prescriptionRequired', e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-500"
+              />
+              <label htmlFor="prescriptionRequiredToggle" className="text-sm font-medium text-foreground cursor-pointer">
+                Requires Doctor's Prescription (Rx)
+              </label>
+            </div>
+          </FormField>
+
+          <FormField label="Manufacturer" hint="Pharmaceutical company manufacturing this medicine.">
+            <Input
+              placeholder="e.g. Cipla Ltd."
+              value={value.manufacturer}
+              onChange={(e) => setField('manufacturer', e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="Manufacturer Address" hint="Registered manufacturing facility location.">
+            <Input
+              placeholder="e.g. Verna Industrial Estate, Goa"
+              value={value.manufacturerAddress}
+              onChange={(e) => setField('manufacturerAddress', e.target.value)}
+            />
+          </FormField>
+
+          <FormField
+            label="Storage Condition"
+            className="sm:col-span-2"
+            hint="Preservation instructions (e.g. Store below 25°C, protect from direct sunlight)."
+          >
+            <Input
+              placeholder="e.g. Store in a cool & dry place below 25°C. Keep out of reach of children."
+              value={value.storageInformation}
+              onChange={(e) => setField('storageInformation', e.target.value)}
+            />
+          </FormField>
+
+          <FormField
+            label="Indication / Therapeutic Use"
+            className="sm:col-span-2"
+            hint="Symptoms or conditions this medicine treats."
+          >
+            <Textarea
+              rows={2}
+              placeholder="e.g. Relief of fever, headache, body ache and mild to moderate pain."
+              value={value.indication || ''}
+              onChange={(e) => setField('indication', e.target.value)}
+            />
+          </FormField>
+
+          <FormField
+            label="Side Effects & Warnings"
+            className="sm:col-span-2"
+            hint="Contraindications, common side effects, and precautions."
+          >
+            <Textarea
+              rows={2}
+              placeholder="e.g. Overdose may cause liver damage. Consult a physician before prolonged use."
+              value={value.sideEffects || ''}
+              onChange={(e) => setField('sideEffects', e.target.value)}
+            />
+          </FormField>
+        </div>
+      </FormSection>
+    );
+  }
 
   return (
     <FormSection title={sectionTitle} description={description}>
@@ -263,7 +474,7 @@ export function ProductInformationFields({
           </FormField>
           <FormField label="Sugar">
             <Input
-              placeholder="e.g. 6 g"
+              placeholder="e.g. 8 g"
               value={value.nutrition.sugar}
               onChange={(e) => setNutrition('sugar', e.target.value)}
             />
@@ -283,7 +494,19 @@ export function ProductInformationFields({
 
 export function productInformationDisplayItems(raw: unknown): Array<[string, unknown]> {
   const state = productInformationFromApi(raw);
-  const items: Array<[string, unknown]> = [
+  const items: Array<[string, unknown]> = [];
+
+  if (state.genericName) items.push(['Generic Name', state.genericName]);
+  if (state.dosageForm) items.push(['Dosage Form', state.dosageForm]);
+  if (state.strength) items.push(['Strength', state.strength]);
+  if (state.routeOfAdmin) items.push(['Route of Admin', state.routeOfAdmin]);
+  if (state.prescriptionCategory) items.push(['Prescription Category', state.prescriptionCategory]);
+  if (state.prescriptionRequired) items.push(['Doctor Prescription Required', 'Yes (Doctor Rx Required)']);
+  if (state.coldChainRequired) items.push(['Cold-Chain Required', 'Yes (2°C – 8°C)']);
+  if (state.indication) items.push(['Indication', state.indication]);
+  if (state.sideEffects) items.push(['Side Effects / Warnings', state.sideEffects]);
+
+  items.push(
     ['Ingredients', state.ingredients],
     ['Manufacturer', state.manufacturer],
     ['Health Benefits', state.healthBenefits],
@@ -291,7 +514,7 @@ export function productInformationDisplayItems(raw: unknown): Array<[string, unk
     ['Storage Information', state.storageInformation],
     ['Usage Instructions', state.usageInstructions],
     ['Allergens', state.allergens],
-  ];
+  );
 
   const nutritionRows: Array<[string, string]> = [
     ['Serving Size', state.nutrition.servingSize],

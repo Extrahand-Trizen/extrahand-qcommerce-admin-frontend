@@ -1,21 +1,48 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusBadge } from '@/components/shared/status-badge';
-import { SearchInput } from '@/components/shared/search-input';
-import { DataTableCard } from '@/components/shared/data-table-card';
-import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-states';
-import { PaginationBar } from '@/components/shared/pagination-bar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Check, X, Package, ArrowRight, Store, MessageSquare, Eye, Tag, Info, Layers, Clock, Trash2, RotateCcw } from 'lucide-react';
-import { format } from 'date-fns';
+import {
+  Search,
+  Check,
+  X,
+  Package,
+  Store,
+  Layers,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  LayoutGrid,
+  MoreVertical,
+  Calendar,
+  Info,
+  TrendingUp,
+  ArrowRight,
+  Trash2,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+} from 'lucide-react';
+import { format, isToday, isWithinInterval, subDays } from 'date-fns';
 
 interface SellerListing {
   _id: string;
@@ -26,6 +53,7 @@ interface SellerListing {
     storeName?: string;
     fullName?: string;
     phone?: string;
+    mobileNumber?: string;
   };
   masterProductId?: {
     _id?: string;
@@ -37,11 +65,14 @@ interface SellerListing {
     sellingPricePaise?: number;
     packOrSoldAs?: string;
     variant?: string;
+    vertical?: string;
+    isMedicalProduct?: boolean;
     attributes?: Array<{ label?: string; attributeId?: string; value: any }>;
     description?: string;
     productInformation?: Record<string, any>;
     lifespanValue?: number;
     lifespanUnit?: string;
+    countryOfOrigin?: string;
   };
   unit?: string | null;
   sellingPricePaise: number;
@@ -65,23 +96,32 @@ interface SellerListing {
   updatedAt: string;
 }
 
+interface StatsData {
+  underReview: number;
+  approved: number;
+  rejected: number;
+  all: number;
+}
+
 export default function PriceReviewsPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ALL'>('UNDER_REVIEW');
+  const [selectedProductType, setSelectedProductType] = useState<'ALL' | 'KIRANA' | 'MEDICAL'>('ALL');
+  const [selectedShop, setSelectedShop] = useState('all');
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH'>('ALL');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Drawer state for View Changes
+  const [viewChangesItem, setViewChangesItem] = useState<SellerListing | null>(null);
 
   // Modal state for rejection note prompt
   const [rejectModalItem, setRejectModalItem] = useState<SellerListing | null>(null);
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
 
-  // Modal state for View Changes Diff
-  const [viewChangesItem, setViewChangesItem] = useState<SellerListing | null>(null);
-
   // Modal state for Delete Listing
   const [deleteModalItem, setDeleteModalItem] = useState<SellerListing | null>(null);
-
-  const [selectedShop, setSelectedShop] = useState('all');
 
   // Load shops list for filtering
   const { data: shops = [] } = useQuery({
@@ -92,12 +132,31 @@ export default function PriceReviewsPage() {
     },
   });
 
+  // Query high-level stats count
+  const { data: stats } = useQuery<StatsData>({
+    queryKey: ['price-reviews-stats', selectedShop],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedShop !== 'all') params.set('sellerId', selectedShop);
+      const res = await api<StatsData>(`${endpoints.sellerListings}/stats?${params}`);
+      return (
+        res.data || {
+          underReview: 0,
+          approved: 0,
+          rejected: 0,
+          all: 0,
+        }
+      );
+    },
+  });
+
+  // Query listings
   const { data, isLoading } = useQuery({
-    queryKey: ['price-reviews', activeTab, search, selectedShop, page],
+    queryKey: ['price-reviews', activeTab, search, selectedShop, page, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
-        limit: '20',
+        limit: String(pageSize),
       });
       if (activeTab !== 'ALL') {
         params.set('reviewStatus', activeTab);
@@ -120,6 +179,7 @@ export default function PriceReviewsPage() {
       toast.success('Product changes approved and published live!');
       setViewChangesItem(null);
       qc.invalidateQueries({ queryKey: ['price-reviews'] });
+      qc.invalidateQueries({ queryKey: ['price-reviews-stats'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to approve changes'),
   });
@@ -132,11 +192,12 @@ export default function PriceReviewsPage() {
       });
     },
     onSuccess: () => {
-      toast.success('Request rejected and rejection note sent!');
+      toast.success('Request rejected and rejection note sent to seller!');
       setRejectModalItem(null);
       setViewChangesItem(null);
       setRejectionReasonInput('');
       qc.invalidateQueries({ queryKey: ['price-reviews'] });
+      qc.invalidateQueries({ queryKey: ['price-reviews-stats'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to reject changes'),
   });
@@ -150,23 +211,176 @@ export default function PriceReviewsPage() {
     onSuccess: () => {
       toast.success('Product listing deleted successfully!');
       setDeleteModalItem(null);
+      setViewChangesItem(null);
       qc.invalidateQueries({ queryKey: ['price-reviews'] });
+      qc.invalidateQueries({ queryKey: ['price-reviews-stats'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to delete product listing'),
   });
 
+  // Client-side filtering
   const rawItems = data?.items || [];
-  const filteredItems = rawItems.filter((item) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    const productName = item.masterProductId?.name?.toLowerCase() || '';
-    const brand = item.masterProductId?.brand?.toLowerCase() || '';
-    const shopName = item.sellerId?.shopName?.toLowerCase() || item.sellerId?.storeName?.toLowerCase() || '';
-    const sellerName = item.sellerId?.fullName?.toLowerCase() || '';
-    return productName.includes(q) || brand.includes(q) || shopName.includes(q) || sellerName.includes(q);
-  });
+  const filteredItems = useMemo(() => {
+    return rawItems.filter((item) => {
+      // Product Type filter
+      if (selectedProductType !== 'ALL') {
+        const isMed = Boolean(item.masterProductId?.vertical === 'MEDICAL' || item.masterProductId?.isMedicalProduct);
+        if (selectedProductType === 'MEDICAL' && !isMed) return false;
+        if (selectedProductType === 'KIRANA' && isMed) return false;
+      }
 
-  const pendingCount = activeTab === 'UNDER_REVIEW' ? data?.total : undefined;
+      // Date filter
+      if (dateFilter !== 'ALL') {
+        const itemDate = new Date(item.reviewSubmittedAt || item.createdAt);
+        if (dateFilter === 'TODAY' && !isToday(itemDate)) return false;
+        if (dateFilter === 'WEEK') {
+          const sevenDaysAgo = subDays(new Date(), 7);
+          if (!isWithinInterval(itemDate, { start: sevenDaysAgo, end: new Date() })) return false;
+        }
+        if (dateFilter === 'MONTH') {
+          const thirtyDaysAgo = subDays(new Date(), 30);
+          if (!isWithinInterval(itemDate, { start: thirtyDaysAgo, end: new Date() })) return false;
+        }
+      }
+
+      // Search filter
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      const productName = item.masterProductId?.name?.toLowerCase() || '';
+      const brand = item.masterProductId?.brand?.toLowerCase() || '';
+      const shopName = item.sellerId?.shopName?.toLowerCase() || item.sellerId?.storeName?.toLowerCase() || '';
+      const sellerName = item.sellerId?.fullName?.toLowerCase() || '';
+      const shopId = `sh-${String(item.sellerId?._id || '').slice(-4).toLowerCase()}`;
+      return (
+        productName.includes(q) ||
+        brand.includes(q) ||
+        shopName.includes(q) ||
+        sellerName.includes(q) ||
+        shopId.includes(q)
+      );
+    });
+  }, [rawItems, search, selectedProductType, dateFilter]);
+
+  // Compute attribute diffs for drawer & counts
+  const getAttributeDiffs = (item: SellerListing) => {
+    if (!item.pendingAttributes || item.pendingAttributes.length === 0) return [];
+    const liveAttrs = item.customAttributes || item.masterProductId?.attributes || [];
+    const liveMap = new Map<string, string>();
+    liveAttrs.forEach((a) => {
+      const labelKey = String(a.label || '').trim().toLowerCase();
+      const idKey = String(a.attributeId || '').trim().toLowerCase();
+      const val = String(a.value ?? '').trim();
+      if (labelKey) liveMap.set(labelKey, val);
+      if (idKey) liveMap.set(idKey, val);
+    });
+
+    const diffs: Array<{ key: string; liveVal: string; pendingVal: string; status: 'Added' | 'Modified' }> = [];
+
+    item.pendingAttributes.forEach((a) => {
+      const label = (a.label || a.attributeId || '').trim();
+      if (!label) return;
+      const keyLower = label.toLowerCase();
+      const liveVal = liveMap.get(keyLower) ?? (a.attributeId ? liveMap.get(String(a.attributeId).toLowerCase()) : undefined);
+      const pendingVal = String(a.value ?? '').trim();
+
+      // Skip identical values (including boolean representations)
+      if (liveVal !== undefined && (
+        liveVal.toLowerCase() === pendingVal.toLowerCase() ||
+        (liveVal.toLowerCase() === 'false' && pendingVal.toLowerCase() === 'no') ||
+        (liveVal.toLowerCase() === 'true' && pendingVal.toLowerCase() === 'yes') ||
+        (liveVal.toLowerCase() === 'no' && pendingVal.toLowerCase() === 'false') ||
+        (liveVal.toLowerCase() === 'yes' && pendingVal.toLowerCase() === 'true')
+      )) {
+        return;
+      }
+
+      if (liveVal === undefined || liveVal === '') {
+        diffs.push({ key: label, liveVal: '—', pendingVal, status: 'Added' });
+      } else {
+        diffs.push({ key: label, liveVal, pendingVal, status: 'Modified' });
+      }
+    });
+
+    return diffs;
+  };
+
+  // Compute specifications diffs for drawer & counts
+  const getSpecsDiffs = (item: SellerListing) => {
+    const diffs: Array<{ key: string; label: string; liveVal: string; pendingVal: string; status: 'Added' | 'Modified' }> = [];
+    const masterInfo = item.masterProductId?.productInformation || {};
+    const customInfo = item.customProductInformation || {};
+    const currentInfo: Record<string, any> = {
+      ...masterInfo,
+      ...customInfo,
+    };
+
+    if (item.masterProductId?.brand && !currentInfo.brand) currentInfo.brand = item.masterProductId.brand;
+    if (item.masterProductId?.countryOfOrigin && !currentInfo.countryOfOrigin) currentInfo.countryOfOrigin = item.masterProductId.countryOfOrigin;
+    if (item.masterProductId?.lifespanValue != null && currentInfo.lifespanValue == null) currentInfo.lifespanValue = item.masterProductId.lifespanValue;
+    if (item.masterProductId?.lifespanUnit && !currentInfo.lifespanUnit) currentInfo.lifespanUnit = item.masterProductId.lifespanUnit;
+
+    // Aliases
+    if (currentInfo.ingredients && !currentInfo.keyIngredients) currentInfo.keyIngredients = currentInfo.ingredients;
+    if (currentInfo.keyIngredients && !currentInfo.ingredients) currentInfo.ingredients = currentInfo.keyIngredients;
+    if (currentInfo.usageInstructions && !currentInfo.directionsForUse) currentInfo.directionsForUse = currentInfo.usageInstructions;
+    if (currentInfo.directionsForUse && !currentInfo.usageInstructions) currentInfo.usageInstructions = currentInfo.directionsForUse;
+    if (currentInfo.healthBenefits && !currentInfo.keyBenefits) currentInfo.keyBenefits = currentInfo.healthBenefits;
+    if (currentInfo.keyBenefits && !currentInfo.healthBenefits) currentInfo.healthBenefits = currentInfo.keyBenefits;
+    if (currentInfo.storageInformation && !currentInfo.storageCondition) currentInfo.storageCondition = currentInfo.storageInformation;
+    if (currentInfo.storageCondition && !currentInfo.storageInformation) currentInfo.storageInformation = currentInfo.storageCondition;
+    if (currentInfo.allergens && !currentInfo.allergenInfo) currentInfo.allergenInfo = currentInfo.allergens;
+    if (currentInfo.allergenInfo && !currentInfo.allergens) currentInfo.allergens = currentInfo.allergenInfo;
+
+    const pendingInfo = item.pendingProductInformation || {};
+
+    for (const [k, v] of Object.entries(pendingInfo)) {
+      if (v === undefined || v === null || v === '') continue;
+      // Skip inventory/internal keys and non-reviewed mrp
+      if (['batchNumber', 'expiryDate', 'mfgDate', 'rackLocation', 'mrpPaise'].includes(k)) continue;
+      const liveVal = currentInfo[k] != null ? String(currentInfo[k]).trim() : '';
+      const pendingVal = String(v).trim();
+      if (pendingVal !== '' && pendingVal.toLowerCase() !== liveVal.toLowerCase()) {
+        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        diffs.push({
+          key: k,
+          label,
+          liveVal: liveVal || '—',
+          pendingVal,
+          status: liveVal ? 'Modified' : 'Added',
+        });
+      }
+    }
+
+    if (
+      item.pendingDescription &&
+      item.pendingDescription.trim() !== (item.customDescription || item.masterProductId?.description || '').trim()
+    ) {
+      const liveDesc = (item.customDescription || item.masterProductId?.description || '').trim();
+      diffs.push({
+        key: 'description',
+        label: 'Description',
+        liveVal: liveDesc ? `${liveDesc.slice(0, 32)}...` : '—',
+        pendingVal: `${item.pendingDescription.trim().slice(0, 32)}...`,
+        status: liveDesc ? 'Modified' : 'Added',
+      });
+    }
+
+    return diffs;
+  };
+
+  // Compute total count of changes for row badge
+  const getChangeCount = (item: SellerListing) => {
+    const currentPricePaise = item.sellingPricePaise ?? 0;
+    const isPriceChanged = item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== currentPricePaise;
+    const currentUnit = (item.unit || item.masterProductId?.packOrSoldAs || item.masterProductId?.variant || 'Standard').trim();
+    const isUnitChanged = Boolean(item.pendingUnit && item.pendingUnit.trim().toLowerCase() !== currentUnit.toLowerCase());
+    const attrDiffs = getAttributeDiffs(item);
+    const specsDiffs = getSpecsDiffs(item);
+    const notesChanged = Boolean(item.pendingNotes && item.pendingNotes.trim() !== (item.customNotes || '').trim());
+
+    let count = (isPriceChanged ? 1 : 0) + (isUnitChanged ? 1 : 0) + attrDiffs.length + specsDiffs.length + (notesChanged ? 1 : 0);
+    return Math.max(1, count);
+  };
 
   const handleConfirmReject = () => {
     if (!rejectModalItem) return;
@@ -174,742 +388,832 @@ export default function PriceReviewsPage() {
     rejectMutation.mutate({ id: rejectModalItem._id, reason: reasonText });
   };
 
-  const showActionsColumn = true;
-  const colsCount = 7;
-
-  // Helper to compute attribute diffs
-  const getAttributeDiffs = (item: SellerListing) => {
-    if (!item.pendingAttributes || item.pendingAttributes.length === 0) return [];
-    const liveAttrs = item.customAttributes || item.masterProductId?.attributes || [];
-    const pendingAttrs = item.pendingAttributes;
-
-    const liveMap = new Map<string, string>();
-    liveAttrs.forEach((a) => {
-      const key = (a.label || a.attributeId || '').trim();
-      if (key) liveMap.set(key.toLowerCase(), String(a.value ?? '').trim());
-    });
-
-    const diffs: Array<{ key: string; liveVal: string; pendingVal: string; status: 'Added' | 'Changed' }> = [];
-
-    pendingAttrs.forEach((a) => {
-      const label = (a.label || a.attributeId || '').trim();
-      if (!label) return;
-      const keyLower = label.toLowerCase();
-      const liveVal = liveMap.get(keyLower);
-      const pendingVal = String(a.value ?? '').trim();
-
-      if (liveVal === undefined) {
-        diffs.push({ key: label, liveVal: '—', pendingVal, status: 'Added' });
-      } else if (liveVal !== pendingVal) {
-        diffs.push({ key: label, liveVal, pendingVal, status: 'Changed' });
-      }
-    });
-
-    return diffs;
-  };
-
-  // Helper to compute specifications diffs
-  const getSpecsDiffs = (item: SellerListing) => {
-    if (!item.pendingProductInformation || Object.keys(item.pendingProductInformation).length === 0) return [];
-    const currentInfo = item.customProductInformation || item.masterProductId?.productInformation || {};
-    const diffs: Array<{ key: string; label: string; liveVal: string; pendingVal: string }> = [];
-
-    for (const [k, v] of Object.entries(item.pendingProductInformation)) {
-      if (v === undefined || v === null) continue;
-      const liveVal = currentInfo[k] != null ? String(currentInfo[k]).trim() : '';
-      const pendingVal = String(v).trim();
-      if (pendingVal !== '' && pendingVal !== liveVal) {
-        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
-        diffs.push({ key: k, label, liveVal: liveVal || '—', pendingVal });
-      }
-    }
-    return diffs;
+  const counts = {
+    underReview: stats?.underReview ?? (activeTab === 'UNDER_REVIEW' ? data?.total ?? 0 : 0),
+    approved: stats?.approved ?? (activeTab === 'APPROVED' ? data?.total ?? 0 : 0),
+    rejected: stats?.rejected ?? (activeTab === 'REJECTED' ? data?.total ?? 0 : 0),
+    all: stats?.all ?? (activeTab === 'ALL' ? data?.total ?? 0 : 0),
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header with Sub-navigation */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Product Approvals</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Review seller updates to prices, units, and attributes. Compare live vs requested changes and approve or reject.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="gap-1.5 border-border hover:bg-slate-50">
-            <Link href="/product-submissions">
-              <Layers className="h-4 w-4 text-amber-600" />
-              Custom Product Submissions
-            </Link>
-          </Button>
-          <Button asChild variant="default" size="sm" className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5">
-            <Link href="/price-reviews">
-              <Tag className="h-4 w-4" />
-              Price &amp; Unit Reviews
-            </Link>
-          </Button>
-        </div>
+    <div className="space-y-6 pb-12">
+      {/* Breadcrumb & Header */}
+      <div>
+        <nav className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1.5">
+          <Link href="/dashboard" className="hover:text-amber-800 transition-colors">
+            Home
+          </Link>
+          <span>&rsaquo;</span>
+          <span className="text-slate-800 font-semibold">Product Approvals</span>
+        </nav>
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Product Approvals</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Review seller-submitted changes to existing products.
+        </p>
       </div>
 
-      {/* Segmented Filter Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
-        <Button
-          variant={activeTab === 'UNDER_REVIEW' ? 'default' : 'outline'}
-          size="sm"
+      {/* Top 4 Stat / Metric Summary Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Card 1: Under Review */}
+        <button
+          type="button"
           onClick={() => { setActiveTab('UNDER_REVIEW'); setPage(1); }}
-          className="gap-2"
+          className={`flex items-center gap-4 rounded-xl border p-4 text-left transition-all ${
+            activeTab === 'UNDER_REVIEW'
+              ? 'border-amber-400 bg-[#FEFCE8] shadow-xs ring-2 ring-amber-300/60'
+              : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
+          }`}
         >
-          <span>Under Review</span>
-          {pendingCount !== undefined && (
-            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
-              {pendingCount}
-            </span>
-          )}
-        </Button>
-        <Button
-          variant={activeTab === 'APPROVED' ? 'default' : 'outline'}
-          size="sm"
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+            <Clock className="h-6 w-6 stroke-[2.2]" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Under Review</p>
+            <p className="text-2xl font-black text-slate-900">{counts.underReview}</p>
+          </div>
+        </button>
+
+        {/* Card 2: Approved */}
+        <button
+          type="button"
           onClick={() => { setActiveTab('APPROVED'); setPage(1); }}
+          className={`flex items-center gap-4 rounded-xl border p-4 text-left transition-all ${
+            activeTab === 'APPROVED'
+              ? 'border-emerald-400 bg-emerald-50/70 shadow-xs ring-2 ring-emerald-300/60'
+              : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
+          }`}
         >
-          Approved
-        </Button>
-        <Button
-          variant={activeTab === 'REJECTED' ? 'default' : 'outline'}
-          size="sm"
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <CheckCircle2 className="h-6 w-6 stroke-[2.2]" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Approved</p>
+            <p className="text-2xl font-black text-slate-900">{counts.approved}</p>
+          </div>
+        </button>
+
+        {/* Card 3: Rejected */}
+        <button
+          type="button"
           onClick={() => { setActiveTab('REJECTED'); setPage(1); }}
+          className={`flex items-center gap-4 rounded-xl border p-4 text-left transition-all ${
+            activeTab === 'REJECTED'
+              ? 'border-rose-400 bg-rose-50/70 shadow-xs ring-2 ring-rose-300/60'
+              : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
+          }`}
         >
-          Rejected Log History
-        </Button>
-        <Button
-          variant={activeTab === 'ALL' ? 'default' : 'outline'}
-          size="sm"
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+            <XCircle className="h-6 w-6 stroke-[2.2]" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Rejected</p>
+            <p className="text-2xl font-black text-slate-900">{counts.rejected}</p>
+          </div>
+        </button>
+
+        {/* Card 4: All Listings */}
+        <button
+          type="button"
           onClick={() => { setActiveTab('ALL'); setPage(1); }}
+          className={`flex items-center gap-4 rounded-xl border p-4 text-left transition-all ${
+            activeTab === 'ALL'
+              ? 'border-amber-400 bg-[#FEFCE8] shadow-xs ring-2 ring-amber-300/60'
+              : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
+          }`}
         >
-          All Listings
-        </Button>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <LayoutGrid className="h-6 w-6 stroke-[2.2]" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">All Listings</p>
+            <p className="text-2xl font-black text-slate-900">{counts.all}</p>
+          </div>
+        </button>
+      </div>
+
+      {/* Filter Tabs / Pills */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => { setActiveTab('UNDER_REVIEW'); setPage(1); }}
+          className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+            activeTab === 'UNDER_REVIEW'
+              ? 'bg-[#FACC15] text-slate-950 shadow-xs ring-1 ring-amber-400'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Under Review ({counts.underReview})
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('APPROVED'); setPage(1); }}
+          className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+            activeTab === 'APPROVED'
+              ? 'bg-[#FACC15] text-slate-950 shadow-xs ring-1 ring-amber-400'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Approved ({counts.approved})
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('REJECTED'); setPage(1); }}
+          className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+            activeTab === 'REJECTED'
+              ? 'bg-[#FACC15] text-slate-950 shadow-xs ring-1 ring-amber-400'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Rejected ({counts.rejected})
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('ALL'); setPage(1); }}
+          className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+            activeTab === 'ALL'
+              ? 'bg-[#FACC15] text-slate-950 shadow-xs ring-1 ring-amber-400'
+              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          All Listings ({counts.all})
+        </button>
+      </div>
+
+      {/* Filter Toolbar: Search, Product Type, Seller/Shop, Submitted Date */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+        {/* 1. Search Box */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search product, brand, seller or shop ID..."
+            className="w-full rounded-lg border border-slate-200 bg-slate-50/50 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-400"
+          />
+        </div>
+
+        {/* 2. Product Type Dropdown */}
+        <div>
+          <Select
+            value={selectedProductType}
+            onValueChange={(v: 'ALL' | 'KIRANA' | 'MEDICAL') => { setSelectedProductType(v); setPage(1); }}
+          >
+            <SelectTrigger className="h-9 w-full text-xs border-slate-200 bg-white">
+              <SelectValue placeholder="Product Type: All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Types</SelectItem>
+              <SelectItem value="KIRANA">Kirana</SelectItem>
+              <SelectItem value="MEDICAL">Medical</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* 3. Seller / Shop Dropdown */}
+        <div>
+          <Select
+            value={selectedShop}
+            onValueChange={(v) => { setSelectedShop(v); setPage(1); }}
+          >
+            <SelectTrigger className="h-9 w-full text-xs border-slate-200 bg-white">
+              <SelectValue placeholder="Seller / Shop: All Shops" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Shops</SelectItem>
+              {shops.map((s) => (
+                <SelectItem key={s.sellerId} value={s.sellerId}>
+                  {s.shopName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* 4. Submitted Date Dropdown */}
+        <div className="flex items-center gap-2">
+          <Select
+            value={dateFilter}
+            onValueChange={(v: 'ALL' | 'TODAY' | 'WEEK' | 'MONTH') => { setDateFilter(v); setPage(1); }}
+          >
+            <SelectTrigger className="h-9 w-full text-xs border-slate-200 bg-white">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                <SelectValue placeholder="Submitted Date: Any Date" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Any Date</SelectItem>
+              <SelectItem value="TODAY">Today</SelectItem>
+              <SelectItem value="WEEK">Last 7 Days</SelectItem>
+              <SelectItem value="MONTH">This Month</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {(search.trim() || selectedShop !== 'all' || selectedProductType !== 'ALL' || dateFilter !== 'ALL') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setSelectedShop('all');
+                setSelectedProductType('ALL');
+                setDateFilter('ALL');
+                setPage(1);
+              }}
+              title="Reset all filters"
+              className="h-9 w-9 shrink-0 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center transition"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Table Card */}
-      <DataTableCard
-        toolbar={
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-1 flex-col gap-2.5 sm:flex-row sm:items-center">
-              <SearchInput
-                value={search}
-                onChange={(v) => { setSearch(v); setPage(1); }}
-                placeholder="Search product, brand, or store..."
-                className="w-full sm:max-w-xs"
-              />
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-[#F5E8C7] bg-[#FFFBEB] text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                <th className="py-3 px-4">Product</th>
+                <th className="py-3 px-3">Type</th>
+                <th className="py-3 px-4">Seller &amp; Shop</th>
+                <th className="py-3 px-4">Price <span className="text-[10px] font-normal normal-case text-slate-500">(Current &rarr; Requested)</span></th>
+                <th className="py-3 px-3">Changes</th>
+                <th className="py-3 px-4">Submitted</th>
+                <th className="py-3 px-3">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                    <div className="flex items-center justify-center gap-2">
+                      <Clock className="h-4 w-4 animate-spin text-amber-600" />
+                      Loading listings...
+                    </div>
+                  </td>
+                </tr>
+              ) : !filteredItems.length ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-slate-500">
+                    <Package className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                    <p className="font-semibold text-slate-800">No listings found</p>
+                    <p className="text-xs text-slate-400 mt-1">Try clearing or adjusting your search filters.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredItems.map((item) => {
+                  const currentPrice = (item.sellingPricePaise ?? 0) / 100;
+                  const pendingPrice =
+                    item.pendingSellingPricePaise != null
+                      ? item.pendingSellingPricePaise / 100
+                      : currentPrice;
+                  const currentUnit = (
+                    item.unit ||
+                    item.masterProductId?.packOrSoldAs ||
+                    item.masterProductId?.variant ||
+                    '1 unit'
+                  ).trim();
+                  const pendingUnit = item.pendingUnit?.trim() || currentUnit;
+
+                  const isMedical = Boolean(
+                    item.masterProductId?.vertical === 'MEDICAL' || item.masterProductId?.isMedicalProduct
+                  );
+
+                  const changeCount = getChangeCount(item);
+                  const sellerName = item.sellerId?.fullName || 'Seller';
+                  const shopName = item.sellerId?.shopName || item.sellerId?.storeName || 'Store';
+                  const shopCode = `SH-${String(item.sellerId?._id || '7732').slice(-4).toUpperCase()}`;
+
+                  const productName = item.masterProductId?.name || 'Kirana Product';
+                  const brand = item.masterProductId?.brand || 'Not specified';
+                  const imageUrl = item.masterProductId?.imageUrl;
+
+                  const dateObj = new Date(item.reviewSubmittedAt || item.createdAt);
+                  const isUnderReview = item.reviewStatus === 'UNDER_REVIEW';
+
+                  return (
+                    <tr
+                      key={item.logId || item._id}
+                      className="transition-colors hover:bg-amber-50/30 group"
+                    >
+                      {/* 1. Product Cell */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          {imageUrl ? (
+                            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                              <Image src={imageUrl} alt={productName} fill className="object-contain p-0.5" />
+                            </div>
+                          ) : (
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-amber-50/60 text-amber-700">
+                              <Package className="h-5 w-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-slate-900 max-w-[200px]" title={productName}>
+                              {productName}
+                            </p>
+                            <p className="text-[11px] text-slate-400">Brand: {brand}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 2. Type Badge */}
+                      <td className="py-3 px-3">
+                        {isMedical ? (
+                          <span className="inline-flex items-center rounded-md border border-[#BAE6FD] bg-[#E0F2FE] px-2 py-0.5 text-[11px] font-semibold text-[#0369A1]">
+                            Medical
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-md border border-[#FDE68A] bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-semibold text-[#92400E]">
+                            Kirana
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 3. Seller & Shop */}
+                      <td className="py-3 px-4">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-slate-900">{sellerName}</p>
+                          <p className="truncate text-[11px] text-slate-400">
+                            {shopName} <span className="font-mono text-slate-400">({shopCode})</span>
+                          </p>
+                        </div>
+                      </td>
+
+                      {/* 4. Price (Current -> Requested) */}
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-900">
+                            ₹{currentPrice.toFixed(2)} &rarr; ₹{pendingPrice.toFixed(2)}
+                          </span>
+                          <span className="text-[11px] text-slate-400">({pendingUnit})</span>
+                        </div>
+                      </td>
+
+                      {/* 5. Changes Badge */}
+                      <td className="py-3 px-3">
+                        <span className="inline-flex items-center rounded-full border border-[#FDE68A] bg-[#FEF9C3] px-2.5 py-0.5 text-[11px] font-semibold text-[#92400E]">
+                          {changeCount} {changeCount === 1 ? 'change' : 'changes'}
+                        </span>
+                      </td>
+
+                      {/* 6. Submitted Date */}
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col text-[11px] leading-tight text-slate-600">
+                          <span className="font-medium text-slate-700">{format(dateObj, 'MMM d, yyyy')}</span>
+                          <span className="text-slate-400">{format(dateObj, 'h:mm a')}</span>
+                        </div>
+                      </td>
+
+                      {/* 7. Status */}
+                      <td className="py-3 px-3">
+                        {item.reviewStatus === 'UNDER_REVIEW' && (
+                          <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100/70 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                            Under Review
+                          </span>
+                        )}
+                        {item.reviewStatus === 'APPROVED' && (
+                          <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100/70 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-900">
+                            Approved
+                          </span>
+                        )}
+                        {item.reviewStatus === 'REJECTED' && (
+                          <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-100/70 px-2.5 py-0.5 text-[11px] font-semibold text-rose-900">
+                            Rejected
+                          </span>
+                        )}
+                        {item.reviewStatus === 'PENDING_REVIEW' && (
+                          <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100/70 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                            Pending Review
+                          </span>
+                        )}
+                      </td>
+
+                      {/* 8. Actions */}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setViewChangesItem(item)}
+                            className="rounded-lg bg-[#FDE047] hover:bg-[#FACC15] px-3.5 py-1.5 text-xs font-semibold text-slate-950 transition shadow-2xs"
+                          >
+                            View Changes
+                          </button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="h-8 w-8 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 flex items-center justify-center transition"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 text-xs">
+                              {item.sellerId?._id && (
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={`/sellers/stores/${item.sellerId._id}?tab=price-changes`}
+                                    className="flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                                    View Store Profile
+                                  </Link>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() => setDeleteModalItem(item)}
+                                className="flex items-center gap-2 text-red-600 focus:text-red-700 cursor-pointer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete Listing
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Table Footer: Summary & Pagination */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+          <div>
+            Showing {filteredItems.length ? (page - 1) * pageSize + 1 : 0}&ndash;
+            {Math.min(page * pageSize, data?.total || filteredItems.length)} of {data?.total || filteredItems.length} products
+          </div>
+
+          <div className="flex items-center gap-4 self-end sm:self-auto">
+            {/* Page Size Selector */}
+            <div className="flex items-center gap-1.5">
               <Select
-                value={selectedShop}
-                onValueChange={(v) => { setSelectedShop(v); setPage(1); }}
+                value={String(pageSize)}
+                onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}
               >
-                <SelectTrigger className="w-full sm:w-56">
-                  <SelectValue placeholder="Filter by Shop" />
+                <SelectTrigger className="h-8 w-24 text-xs border-slate-200">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Seller Shops</SelectItem>
-                  {shops.map((s) => (
-                    <SelectItem key={s.sellerId} value={s.sellerId}>
-                      {s.shopName}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="10">10 / page</SelectItem>
+                  <SelectItem value="20">20 / page</SelectItem>
+                  <SelectItem value="50">50 / page</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {(search.trim() || selectedShop !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { setSearch(''); setSelectedShop('all'); setPage(1); }}
-                className="text-xs text-muted-foreground hover:text-foreground shrink-0"
-              >
-                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                Reset Filters
-              </Button>
-            )}
-          </div>
-        }
-      >
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Product</TableHead>
-              <TableHead>Seller / Store</TableHead>
-              <TableHead>Approved Live Details</TableHead>
-              <TableHead>Requested / Pending Changes</TableHead>
-              <TableHead>Submitted Date</TableHead>
-              <TableHead>Status</TableHead>
-              {showActionsColumn && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableLoadingRows cols={colsCount} />
-            ) : !filteredItems.length ? (
-              <TableEmptyRow
-                cols={colsCount}
-                message={
-                  activeTab === 'UNDER_REVIEW'
-                    ? 'No pending product content or price reviews found'
-                    : activeTab === 'REJECTED'
-                    ? 'No rejected history logs found'
-                    : 'No listings match your search criteria'
-                }
-              />
-            ) : (
-              filteredItems.map((item) => {
-                const currentPricePaise = item.sellingPricePaise ?? 0;
-                const currentPrice = currentPricePaise / 100;
-                const currentUnit = (item.unit || item.masterProductId?.packOrSoldAs || item.masterProductId?.variant || 'Standard').trim();
 
-                const isPriceChanged = item.pendingSellingPricePaise != null && item.pendingSellingPricePaise !== currentPricePaise;
-                const isUnitChanged = Boolean(item.pendingUnit && item.pendingUnit.trim() !== currentUnit);
-
-                const currentDesc = (item.customDescription || item.masterProductId?.description || '').trim();
-                const pendingDesc = (item.pendingDescription || '').trim();
-                const isDescChanged = Boolean(pendingDesc && pendingDesc !== currentDesc);
-
-                const currentNotes = (item.customNotes || '').trim();
-                const pendingNotes = (item.pendingNotes || '').trim();
-                const isNotesChanged = Boolean(pendingNotes && pendingNotes !== currentNotes);
-
-                const attrDiffs = getAttributeDiffs(item);
-                const isAttributesChanged = attrDiffs.length > 0;
-
-                const specsDiffs = getSpecsDiffs(item);
-                const isSpecsChanged = specsDiffs.length > 0;
-
-                const hasAnyPending = isPriceChanged || isUnitChanged || isAttributesChanged || isDescChanged || isNotesChanged || isSpecsChanged;
-                const isUnderReview = item.reviewStatus === 'UNDER_REVIEW';
-
-                const shopName = item.sellerId?.shopName || item.sellerId?.storeName || item.sellerId?.fullName || 'Seller';
-                const productName = item.masterProductId?.name || 'Product';
-                const brand = item.masterProductId?.brand;
-                const imageUrl = item.masterProductId?.imageUrl;
-
-                return (
-                  <TableRow key={item.logId || item._id} className="group">
-                    {/* Product Cell */}
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {imageUrl ? (
-                          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                            <Image src={imageUrl} alt={productName} fill className="object-cover" />
-                          </div>
-                        ) : (
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
-                            <Package className="h-5 w-5" />
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{productName}</p>
-                          {brand && <p className="text-xs text-muted-foreground">{brand}</p>}
-                        </div>
-                      </div>
-                    </TableCell>
-
-                    {/* Seller Cell */}
-                    <TableCell>
-                      {item.sellerId?._id ? (
-                        <Link
-                          href={`/sellers/stores/${item.sellerId._id}?tab=price-changes`}
-                          className="flex items-center gap-1.5 text-sm font-medium text-slate-900 hover:text-amber-700 hover:underline"
-                        >
-                          <Store className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                          <span className="truncate">{shopName}</span>
-                        </Link>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                          <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{shopName}</span>
-                        </div>
-                      )}
-                    </TableCell>
-
-                    {/* Approved Live Details (Price & Unit) */}
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-slate-900">₹{currentPrice.toFixed(2)}</span>
-                        <span className="text-xs text-muted-foreground">Unit: {currentUnit}</span>
-                      </div>
-                    </TableCell>
-
-                    {/* Requested Changes (Field Names Only - No Values) */}
-                    <TableCell>
-                      <div className="flex flex-col gap-1.5">
-                        {hasAnyPending ? (
-                          <div className="flex flex-wrap gap-1">
-                            {isPriceChanged && (
-                              <span className="rounded bg-amber-100 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-                                Price
-                              </span>
-                            )}
-                            {isUnitChanged && (
-                              <span className="rounded bg-blue-100 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-900">
-                                Unit
-                              </span>
-                            )}
-                            {isAttributesChanged && (
-                              <span className="rounded bg-purple-100 border border-purple-200 px-2 py-0.5 text-[11px] font-semibold text-purple-900">
-                                Attributes
-                              </span>
-                            )}
-                            {isDescChanged && (
-                              <span className="rounded bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-                                Description
-                              </span>
-                            )}
-                            {isNotesChanged && (
-                              <span className="rounded bg-indigo-100 border border-indigo-200 px-2 py-0.5 text-[11px] font-semibold text-indigo-900">
-                                Notes
-                              </span>
-                            )}
-                            {isSpecsChanged && (
-                              <span className="rounded bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-900">
-                                Specifications
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-
-                        {!isUnderReview && item.rejectionReason && (
-                          <div className="flex items-start gap-1 rounded border border-red-200 bg-red-50 p-1.5 text-xs text-red-800">
-                            <MessageSquare className="h-3.5 w-3.5 shrink-0 text-red-600 mt-0.5" />
-                            <div>
-                              <span className="font-bold">Rejection Note: </span>
-                              <span>{item.rejectionReason}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    {/* Submitted Date */}
-                    <TableCell className="text-xs text-muted-foreground">
-                      {item.reviewSubmittedAt
-                        ? format(new Date(item.reviewSubmittedAt), 'MMM d, yyyy h:mm a')
-                        : item.createdAt
-                          ? format(new Date(item.createdAt), 'MMM d, yyyy')
-                          : '—'}
-                    </TableCell>
-
-                    {/* Status Badge */}
-                    <TableCell>
-                      <StatusBadge status={item.reviewStatus} />
-                    </TableCell>
-
-                    {/* Actions Cell */}
-                    {showActionsColumn && (
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-8 gap-1 bg-slate-100 hover:bg-slate-200 text-slate-800"
-                            onClick={() => setViewChangesItem(item)}
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View Changes
-                          </Button>
-
-                          {isUnderReview && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                onClick={() => approveMutation.mutate(item._id)}
-                                disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 gap-1 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                                onClick={() => {
-                                  setRejectModalItem(item);
-                                  setRejectionReasonInput('');
-                                }}
-                                disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                                Reject
-                              </Button>
-                            </>
-                          )}
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 gap-1 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
-                            onClick={() => setDeleteModalItem(item)}
-                            disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-
-        {data && data.totalPages > 1 && (
-          <div className="border-t border-border p-4">
-            <PaginationBar
-              page={page}
-              totalPages={data.totalPages}
-              total={data.total}
-              onPageChange={(p) => setPage(p)}
-            />
-          </div>
-        )}
-      </DataTableCard>
-
-      {/* VIEW CHANGES COMPARISON MODAL */}
-      {viewChangesItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-2xl border border-border space-y-6 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-start justify-between border-b pb-4 border-border">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xl font-bold text-slate-900">{viewChangesItem.masterProductId?.name}</h3>
-                  <StatusBadge status={viewChangesItem.reviewStatus} />
-                </div>
-                <p className="text-sm text-slate-500 mt-1">
-                  Store: <span className="font-semibold text-slate-800">{viewChangesItem.sellerId?.shopName || viewChangesItem.sellerId?.storeName || 'Seller Store'}</span> · Submitted: {viewChangesItem.reviewSubmittedAt ? format(new Date(viewChangesItem.reviewSubmittedAt), 'MMM d, yyyy h:mm a') : '—'}
-                </p>
-              </div>
+            {/* Pagination Controls */}
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setViewChangesItem(null)}
-                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="h-8 w-8 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 flex items-center justify-center transition"
               >
-                <X className="h-5 w-5" />
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <span className="h-8 min-w-[32px] rounded-md bg-[#FACC15] px-2 text-xs font-bold text-slate-950 flex items-center justify-center">
+                {page}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setPage((p) => (data?.totalPages && p < data.totalPages ? p + 1 : p))}
+                disabled={Boolean(data?.totalPages && page >= data.totalPages)}
+                className="h-8 w-8 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 flex items-center justify-center transition"
+              >
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Price & Unit Diff - Only show if actually changed */}
-            {(() => {
-              const livePricePaise = viewChangesItem.sellingPricePaise ?? 0;
-              const hasPriceDiff = viewChangesItem.pendingSellingPricePaise != null && viewChangesItem.pendingSellingPricePaise !== livePricePaise;
-              const liveUnit = (viewChangesItem.unit || viewChangesItem.masterProductId?.packOrSoldAs || viewChangesItem.masterProductId?.variant || 'Standard').trim();
-              const hasUnitDiff = Boolean(viewChangesItem.pendingUnit && viewChangesItem.pendingUnit.trim() !== liveUnit);
+      {/* ── RIGHT SLIDE-OVER DRAWER (VIEW CHANGES) ── */}
+      {viewChangesItem && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in"
+            onClick={() => setViewChangesItem(null)}
+          />
 
-              if (!hasPriceDiff && !hasUnitDiff) return null;
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-xl bg-white shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50/50">
+                <h2 className="text-xl font-bold text-slate-900">View Changes</h2>
+                <button
+                  type="button"
+                  onClick={() => setViewChangesItem(null)}
+                  className="rounded-full p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-800 transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-              return (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                    <Layers className="h-4 w-4 text-amber-700" /> Price &amp; Pack Unit Change
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-xs text-slate-500 block">Existing Approved</span>
-                      <span className="font-semibold text-slate-900">
-                        ₹{(livePricePaise / 100).toFixed(2)}
-                      </span>
-                      <span className="text-xs text-slate-500 ml-2">({liveUnit})</span>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500 block">Seller Changed To</span>
-                      <span className={`font-bold ${hasPriceDiff ? 'text-amber-900' : 'text-slate-900'}`}>
-                        ₹{hasPriceDiff ? (viewChangesItem.pendingSellingPricePaise! / 100).toFixed(2) : (livePricePaise / 100).toFixed(2)}
-                      </span>
-                      <span className={`text-xs ml-2 ${hasUnitDiff ? 'font-bold text-amber-900' : 'text-slate-500'}`}>
-                        ({hasUnitDiff ? viewChangesItem.pendingUnit : liveUnit})
-                      </span>
-                      {hasPriceDiff && (
-                        <span className="ml-2 text-xs font-semibold text-amber-800">
-                          ({viewChangesItem.pendingSellingPricePaise! > livePricePaise ? '+' : ''}
-                          ₹{((viewChangesItem.pendingSellingPricePaise! - livePricePaise) / 100).toFixed(2)})
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+              {/* Drawer Content Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* 1. Top Product Summary Card */}
+                {(() => {
+                  const currentPrice = (viewChangesItem.sellingPricePaise ?? 0) / 100;
+                  const pendingPrice =
+                    viewChangesItem.pendingSellingPricePaise != null
+                      ? viewChangesItem.pendingSellingPricePaise / 100
+                      : currentPrice;
+                  const currentUnit = (
+                    viewChangesItem.unit ||
+                    viewChangesItem.masterProductId?.packOrSoldAs ||
+                    viewChangesItem.masterProductId?.variant ||
+                    '1 unit'
+                  ).trim();
+                  const pendingUnit = viewChangesItem.pendingUnit?.trim() || currentUnit;
 
-            {/* Attribute Comparison View - Only show if actually changed */}
-            {(() => {
-              const diffs = getAttributeDiffs(viewChangesItem);
-              if (diffs.length === 0) return null;
-              return (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Tag className="h-4 w-4 text-purple-600" /> Product Attributes Comparison
-                  </h4>
-                  <div className="rounded-lg border border-border overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 border-b border-border text-slate-600 uppercase font-bold">
-                        <tr>
-                          <th className="p-2.5">Attribute Name</th>
-                          <th className="p-2.5">Previous Approved Value</th>
-                          <th className="p-2.5">Seller Changed To</th>
-                          <th className="p-2.5 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {diffs.map((diff, idx) => (
-                          <tr key={diff.key + idx} className="bg-purple-50/30 font-medium">
-                            <td className="p-2.5 font-bold text-slate-800">{diff.key}</td>
-                            <td className="p-2.5 text-slate-600 line-through">{diff.liveVal}</td>
-                            <td className="p-2.5 font-bold text-slate-900">{diff.pendingVal}</td>
-                            <td className="p-2.5 text-right">
-                              <span
-                                className={`rounded px-2 py-0.5 text-[10px] font-bold ${
-                                  diff.status === 'Changed'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-emerald-100 text-emerald-800'
-                                }`}
+                  const productName = viewChangesItem.masterProductId?.name || 'Kirana Product';
+                  const brand = viewChangesItem.masterProductId?.brand || 'Not specified';
+                  const imageUrl = viewChangesItem.masterProductId?.imageUrl;
+                  const sellerName = viewChangesItem.sellerId?.fullName || 'Seller';
+                  const shopName = viewChangesItem.sellerId?.shopName || viewChangesItem.sellerId?.storeName || 'Store';
+                  const shopCode = `SH-${String(viewChangesItem.sellerId?._id || '7732').slice(-4).toUpperCase()}`;
+
+                  const priceDiff = pendingPrice - currentPrice;
+                  const pctDiff = currentPrice > 0 ? ((priceDiff / currentPrice) * 100).toFixed(0) : 0;
+
+                  const attrDiffs = getAttributeDiffs(viewChangesItem);
+                  const specsDiffs = getSpecsDiffs(viewChangesItem);
+
+                  return (
+                    <>
+                      {/* Product Header Card */}
+                      <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+                        {imageUrl ? (
+                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            <Image src={imageUrl} alt={productName} fill className="object-contain p-1" />
+                          </div>
+                        ) : (
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-amber-50 text-amber-700">
+                            <Package className="h-7 w-7" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="text-base font-bold text-slate-900 leading-snug">{productName}</h3>
+                            <span className="shrink-0 rounded-full border border-amber-300 bg-amber-100/70 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                              {viewChangesItem.reviewStatus === 'APPROVED' ? 'Approved' : 'Under Review'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">Brand: {brand}</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Seller: <span className="font-medium text-slate-800">{sellerName}</span> &nbsp;|&nbsp; Shop:{' '}
+                            <span className="font-medium text-slate-800">
+                              {shopName} ({shopCode})
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 2. Price & Packaging Section */}
+                      <div className="space-y-2.5">
+                        <h4 className="text-sm font-bold text-slate-900">Price &amp; Packaging</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Previously Approved Card */}
+                          <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-1">
+                            <p className="text-xs font-medium text-slate-500">Previously Approved</p>
+                            <p className="text-2xl font-black text-slate-900">₹{currentPrice.toFixed(2)}</p>
+                            <p className="text-xs text-slate-500 font-medium">{currentUnit}</p>
+                          </div>
+
+                          {/* Seller Requested Card (Highlighted) */}
+                          <div className="rounded-xl border border-amber-400 bg-[#FEFCE8] p-3.5 space-y-1 ring-1 ring-amber-300/40">
+                            <p className="text-xs font-semibold text-amber-900">Seller Requested</p>
+                            <p className="text-2xl font-black text-slate-900">₹{pendingPrice.toFixed(2)}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {priceDiff > 0 && (
+                                <span className="text-xs font-bold text-emerald-700 flex items-center gap-0.5">
+                                  &uarr; +₹{priceDiff.toFixed(2)} (+{pctDiff}%)
+                                </span>
+                              )}
+                              {priceDiff < 0 && (
+                                <span className="text-xs font-bold text-rose-700 flex items-center gap-0.5">
+                                  &darr; -₹{Math.abs(priceDiff).toFixed(2)} ({pctDiff}%)
+                                </span>
+                              )}
+                              {priceDiff === 0 && (
+                                <span className="text-xs font-medium text-slate-500">Price unchanged</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-700 font-medium">{pendingUnit}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3. Changed Attributes Section */}
+                      {attrDiffs.length > 0 && (
+                        <div className="space-y-2.5">
+                          <h4 className="text-sm font-bold text-slate-900">Changed Attributes</h4>
+                          <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+                            {attrDiffs.map((diff) => (
+                              <div
+                                key={diff.key}
+                                className="flex items-center justify-between p-3 text-xs hover:bg-slate-50/50"
                               >
-                                {diff.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
+                                <span className="font-semibold text-slate-800">{diff.key}</span>
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-slate-600 font-mono">
+                                    {diff.liveVal} &rarr; <span className="font-bold text-slate-900">{diff.pendingVal}</span>
+                                  </span>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                      diff.status === 'Added'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}
+                                  >
+                                    {diff.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-            {/* Product Description Diff - Only show if actually changed */}
-            {(() => {
-              const liveDesc = (viewChangesItem.customDescription || viewChangesItem.masterProductId?.description || '').trim();
-              const pendDesc = (viewChangesItem.pendingDescription || '').trim();
-              if (!pendDesc || pendDesc === liveDesc) return null;
-              return (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Info className="h-4 w-4 text-emerald-600" /> Product Description Comparison
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Description</span>
-                      <p className="text-xs text-slate-700 whitespace-pre-wrap">
-                        {liveDesc || 'No description provided'}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-emerald-300 bg-emerald-50/40 p-3">
-                      <span className="text-xs font-bold text-emerald-900 uppercase block mb-1">Seller Changed To</span>
-                      <p className="text-xs text-slate-900 font-medium whitespace-pre-wrap">
-                        {pendDesc}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+                      {/* 4. Specifications & Product Information */}
+                      {specsDiffs.length > 0 && (
+                        <div className="space-y-2.5">
+                          <h4 className="text-sm font-bold text-slate-900">Specifications &amp; Product Information</h4>
+                          <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
+                            {specsDiffs.map((diff) => (
+                              <div
+                                key={diff.key}
+                                className="flex items-center justify-between p-3 text-xs hover:bg-slate-50/50"
+                              >
+                                <span className="font-semibold text-slate-800">{diff.label}</span>
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-slate-600 font-mono">
+                                    {diff.liveVal} &rarr; <span className="font-bold text-slate-900">{diff.pendingVal}</span>
+                                  </span>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                      diff.status === 'Added'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}
+                                  >
+                                    {diff.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-            {/* Seller Notes Diff - Only show if actually changed */}
-            {(() => {
-              const liveNotes = (viewChangesItem.customNotes || '').trim();
-              const pendNotes = (viewChangesItem.pendingNotes || '').trim();
-              if (!pendNotes || pendNotes === liveNotes) return null;
-              return (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <MessageSquare className="h-4 w-4 text-indigo-600" /> Seller Notes Comparison
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Previous Notes</span>
-                      <p className="text-xs text-slate-700 whitespace-pre-wrap">
-                        {liveNotes || 'None'}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
-                      <span className="text-xs font-bold text-indigo-900 uppercase block mb-1">Seller Changed To</span>
-                      <p className="text-xs text-indigo-950 font-medium whitespace-pre-wrap">
-                        {pendNotes}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+                      {/* 5. Additional Notes */}
+                      <div className="rounded-xl border border-amber-300 bg-amber-50/60 p-3.5 flex items-start gap-3">
+                        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-900 text-xs font-bold mt-0.5">
+                          i
+                        </div>
+                        <div className="text-xs space-y-0.5 min-w-0">
+                          <p className="font-bold text-slate-900">Additional Notes</p>
+                          <p className="text-slate-700 leading-relaxed">
+                            {viewChangesItem.pendingNotes ||
+                              viewChangesItem.customNotes ||
+                              'Seller has updated product details as per new guidelines.'}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
 
-            {/* Specifications & Product Information - Only show if actually changed */}
-            {(() => {
-              const specs = getSpecsDiffs(viewChangesItem);
-              if (specs.length === 0) return null;
-              return (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Clock className="h-4 w-4 text-amber-600" /> Specifications &amp; Product Information Comparison
-                  </h4>
-                  <div className="rounded-lg border border-border overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 border-b border-border text-slate-600 uppercase font-bold">
-                        <tr>
-                          <th className="p-2.5">Specification</th>
-                          <th className="p-2.5">Previous Approved Value</th>
-                          <th className="p-2.5">Seller Changed To</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {specs.map((spec) => (
-                          <tr key={spec.key} className="bg-amber-50/30 font-medium">
-                            <td className="p-2.5 font-bold text-slate-800">{spec.label}</td>
-                            <td className="p-2.5 text-slate-600 line-through">{spec.liveVal}</td>
-                            <td className="p-2.5 font-bold text-slate-900">{spec.pendingVal}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
+              {/* Drawer Sticky Footer Actions */}
+              <div className="border-t border-slate-200 p-4 bg-white flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectModalItem(viewChangesItem);
+                    setRejectionReasonInput('');
+                  }}
+                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  className="flex-1 rounded-xl border border-red-300 bg-white hover:bg-red-50 py-3 text-xs font-bold text-red-600 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <X className="h-4 w-4 stroke-[2.5]" />
+                  Reject
+                </button>
 
-            {/* Modal Footer Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setViewChangesItem(null)}
-              >
-                Close
-              </Button>
-
-              {viewChangesItem.reviewStatus === 'UNDER_REVIEW' && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 gap-1"
-                    onClick={() => {
-                      setRejectModalItem(viewChangesItem);
-                      setRejectionReasonInput('');
-                    }}
-                    disabled={approveMutation.isPending || rejectMutation.isPending}
-                  >
-                    <X className="h-4 w-4" />
-                    Reject Changes
-                  </Button>
-
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
-                    onClick={() => approveMutation.mutate(viewChangesItem._id)}
-                    disabled={approveMutation.isPending || rejectMutation.isPending}
-                  >
-                    <Check className="h-4 w-4" />
-                    {approveMutation.isPending ? 'Approving...' : 'Approve & Publish Live'}
-                  </Button>
-                </>
-              )}
+                <button
+                  type="button"
+                  onClick={() => approveMutation.mutate(viewChangesItem._id)}
+                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  className="flex-1 rounded-xl bg-[#FACC15] hover:bg-[#EAB308] py-3 text-xs font-bold text-slate-950 transition flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                >
+                  <Check className="h-4 w-4 stroke-[3]" />
+                  Approve Changes
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Rejection Note Modal Dialog */}
+      {/* ── REJECTION REASON PROMPT MODAL ── */}
       {rejectModalItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl border border-border space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b pb-3 border-border">
-              <h3 className="text-lg font-bold text-slate-900">Reject Update Request</h3>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Reject Product Changes</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Explain to the seller why these requested changes cannot be approved.
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setRejectModalItem(null)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-700">
-                Product: <span className="font-bold text-slate-900">{rejectModalItem.masterProductId?.name}</span>
-              </p>
-              <p className="text-xs text-slate-500">
-                Store: {rejectModalItem.sellerId?.shopName || rejectModalItem.sellerId?.storeName || 'Seller Store'}
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Rejection Note / Reason for Seller *
+            <div>
+              <label htmlFor="rejectionReason" className="block text-xs font-semibold text-slate-700 mb-1">
+                Reason for Rejection *
               </label>
               <textarea
-                className="w-full rounded-md border border-slate-300 p-3 text-sm text-slate-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                id="rejectionReason"
                 rows={3}
-                placeholder="Enter rejection reason (e.g. Invalid attribute values / Description violates store policies)..."
                 value={rejectionReasonInput}
                 onChange={(e) => setRejectionReasonInput(e.target.value)}
+                placeholder="e.g. Requested price exceeds MRP, or specifications need supporting documentation..."
+                className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-slate-900 placeholder-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setRejectModalItem(null)}
-                disabled={rejectMutation.isPending}
+                className="text-xs"
               >
                 Cancel
               </Button>
               <Button
-                variant="default"
+                variant="destructive"
                 size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white gap-1"
                 onClick={handleConfirmReject}
                 disabled={rejectMutation.isPending}
+                className="text-xs bg-red-600 hover:bg-red-700"
               >
-                {rejectMutation.isPending ? 'Rejecting...' : 'Reject Request'}
+                {rejectMutation.isPending ? 'Rejecting...' : 'Confirm Reject'}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* ── DELETE LISTING CONFIRMATION MODAL ── */}
       {deleteModalItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-3 text-red-600 border-b pb-3">
-              <Trash2 className="h-6 w-6 shrink-0 text-red-600" />
-              <h3 className="text-lg font-bold text-slate-900">Delete Product Listing</h3>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Product Listing</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Are you sure you want to remove &quot;{deleteModalItem.masterProductId?.name}&quot; from this seller&apos;s store? This cannot be undone.
+                </p>
+              </div>
             </div>
 
-            <p className="text-sm text-slate-600">
-              Are you sure you want to delete <span className="font-semibold text-slate-900">{deleteModalItem.masterProductId?.name || 'this product'}</span> from store <span className="font-semibold text-slate-900">{deleteModalItem.sellerId?.shopName || deleteModalItem.sellerId?.storeName || deleteModalItem.sellerId?.fullName || 'Seller'}</span>?
-            </p>
-            <p className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
-              This action will remove the live product listing and shop inventory for this seller.
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setDeleteModalItem(null)}
-                disabled={deleteMutation.isPending}
+                className="text-xs"
               >
                 Cancel
               </Button>
               <Button
-                variant="default"
+                variant="destructive"
                 size="sm"
-                className="bg-red-600 hover:bg-red-700 text-white gap-1"
                 onClick={() => deleteMutation.mutate(deleteModalItem._id)}
                 disabled={deleteMutation.isPending}
+                className="text-xs bg-red-600 hover:bg-red-700"
               >
-                <Trash2 className="h-3.5 w-3.5" />
                 {deleteMutation.isPending ? 'Deleting...' : 'Delete Listing'}
               </Button>
             </div>

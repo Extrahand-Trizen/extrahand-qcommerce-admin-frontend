@@ -280,8 +280,25 @@ export default function ProductSubmissionsPage() {
                   <TableRow key={String(s._id)}>
                     <TableCell className="font-medium text-slate-900">
                       <div>
-                        <p>{String(s.submittedProductName)}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p>{String(s.submittedProductName)}</p>
+                          {Boolean(s.isMedicalProduct || s.genericName) ? (
+                            <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20">
+                              Medical{s.prescriptionRequired != null ? ` · ${s.prescriptionRequired ? 'Rx Required' : 'OTC'}` : s.prescriptionCategory ? ` · ${String(s.prescriptionCategory).includes('Rx') || String(s.prescriptionCategory).includes('Schedule') ? 'Rx' : 'OTC'}` : ''}
+                            </span>
+                          ) : null}
+                        </div>
+                        {s.genericName ? (
+                          <p className="text-xs text-blue-600 font-medium">Generic: {String(s.genericName)}</p>
+                        ) : null}
                         {s.brand ? <p className="text-xs text-muted-foreground">{String(s.brand)}</p> : null}
+                        <p className="mt-0.5 text-[11px] text-slate-500 font-medium">
+                          {[
+                            (s.medicalCategory as string) || (typeof s.categoryId === 'object' && (s.categoryId as any)?.name),
+                            (s.medicalSubcategory as string) || (typeof s.subcategoryId === 'object' && (s.subcategoryId as any)?.name),
+                            (s.productType as string) || (typeof s.productTypeId === 'object' && (s.productTypeId as any)?.name),
+                          ].filter(Boolean).join(' › ')}
+                        </p>
                       </div>
                     </TableCell>
                     <TableCell className="text-slate-700">{String(s.packOrSoldAs || '—')}</TableCell>

@@ -10,36 +10,60 @@ import {
   CatalogueImageNameCell,
   CataloguePlacementCell,
   OrderCell,
+  VerticalCell,
 } from '@/components/shared/catalogue-table-cells';
 
 export default function SubcategoriesPage() {
+  const [verticalFilter, setVerticalFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+
   const { data: categories } = useQuery({
-    queryKey: ['categories-all'],
+    queryKey: ['categories-all', verticalFilter],
     queryFn: async () => {
-      const res = await api<{ items: Array<{ _id: string; name: string }> }>(`${endpoints.categories}?limit=100`);
+      const url =
+        verticalFilter !== 'all'
+          ? `${endpoints.categories}?limit=100&vertical=${verticalFilter}`
+          : `${endpoints.categories}?limit=100`;
+      const res = await api<{ items: Array<{ _id: string; name: string }> }>(url);
       return res.data?.items || [];
     },
   });
 
+  const queryParts: string[] = [];
+  if (categoryFilter !== 'all') queryParts.push(`categoryId=${categoryFilter}`);
+  if (verticalFilter !== 'all') queryParts.push(`vertical=${verticalFilter}`);
+  const endpoint =
+    queryParts.length > 0 ? `${endpoints.subcategories}?${queryParts.join('&')}` : endpoints.subcategories;
+
   return (
     <EntityListPage
       title="Subcategories"
-      description="Second-level groupings under each category."
-      endpoint={
-        categoryFilter !== 'all'
-          ? `${endpoints.subcategories}?categoryId=${categoryFilter}`
-          : endpoints.subcategories
-      }
-      queryKey={`subcategories-${categoryFilter}`}
+      description="Second-level groupings under each category, partitioned by store vertical."
+      endpoint={endpoint}
+      queryKey={`subcategories-${verticalFilter}-${categoryFilter}`}
       searchPlaceholder="Search subcategories…"
       columns={[
         { key: 'name', label: 'Subcategory', render: (r) => <CatalogueImageNameCell row={r} imageSize="sm" /> },
         { key: 'categoryId', label: 'Category', render: (r) => <CataloguePlacementCell row={r} /> },
+        { key: 'vertical', label: 'Store Vertical', render: (r) => <VerticalCell row={r} /> },
         { key: 'displayOrder', label: 'Order', render: (r) => <OrderCell value={r.displayOrder} /> },
         { key: 'status', label: 'Status', render: (r) => <StatusBadge status={String(r.status)} /> },
       ]}
       fields={[
+        {
+          section: 'Placement',
+          name: 'vertical',
+          label: 'Store Vertical',
+          type: 'select',
+          defaultValue: 'KIRANA',
+          placeholder: 'Select store vertical',
+          hint: 'Controls visibility. Defaults to Kirana or inherits from parent category.',
+          options: [
+            { value: 'KIRANA', label: '🛒 Kirana / Grocery' },
+            { value: 'MEDICAL', label: '💊 Pharmacy / Medical' },
+            { value: 'ALL', label: '🌐 All Stores (Both)' },
+          ],
+        },
         {
           section: 'Placement',
           name: 'categoryId',
@@ -100,19 +124,38 @@ export default function SubcategoriesPage() {
         },
       ]}
       extraFilters={
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full bg-white sm:w-52">
-            <SelectValue placeholder="Filter by category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories?.map((c) => (
-              <SelectItem key={c._id} value={c._id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Select
+            value={verticalFilter}
+            onValueChange={(v) => {
+              setVerticalFilter(v);
+              setCategoryFilter('all');
+            }}
+          >
+            <SelectTrigger className="w-full bg-white sm:w-44">
+              <SelectValue placeholder="All Verticals" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Verticals</SelectItem>
+              <SelectItem value="KIRANA">🛒 Kirana Only</SelectItem>
+              <SelectItem value="MEDICAL">💊 Medical Only</SelectItem>
+              <SelectItem value="ALL">🌐 All Stores (Both)</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-full bg-white sm:w-52">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories?.map((c) => (
+                <SelectItem key={c._id} value={c._id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       }
     />
   );

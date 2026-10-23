@@ -1,24 +1,62 @@
 'use client';
 
+import { useState } from 'react';
 import { EntityListPage } from '@/components/shared/entity-list-page';
 import { endpoints } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { CatalogueImageNameCell, OrderCell } from '@/components/shared/catalogue-table-cells';
+import { CatalogueImageNameCell, OrderCell, VerticalCell } from '@/components/shared/catalogue-table-cells';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function CategoriesPage() {
+  const [verticalFilter, setVerticalFilter] = useState('all');
+
+  const endpoint =
+    verticalFilter !== 'all'
+      ? `${endpoints.categories}?vertical=${verticalFilter}`
+      : endpoints.categories;
+
   return (
     <EntityListPage
       title="Categories"
-      description="Top-level catalogue groups shown to sellers and customers."
-      endpoint={endpoints.categories}
-      queryKey="categories"
+      description="Top-level catalogue groups partitioned by store vertical (Kirana vs Medical)."
+      endpoint={endpoint}
+      queryKey={`categories-${verticalFilter}`}
       searchPlaceholder="Search categories…"
+      extraFilters={
+        <Select value={verticalFilter} onValueChange={setVerticalFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Verticals" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Verticals</SelectItem>
+            <SelectItem value="KIRANA">🛒 Kirana Only</SelectItem>
+            <SelectItem value="MEDICAL">💊 Medical Only</SelectItem>
+            <SelectItem value="ALL">🌐 All Stores (Both)</SelectItem>
+          </SelectContent>
+        </Select>
+      }
       columns={[
         { key: 'name', label: 'Category', render: (r) => <CatalogueImageNameCell row={r} /> },
+        { key: 'vertical', label: 'Store Vertical', render: (r) => <VerticalCell row={r} /> },
         { key: 'displayOrder', label: 'Order', render: (r) => <OrderCell value={r.displayOrder} /> },
         { key: 'status', label: 'Status', render: (r) => <StatusBadge status={String(r.status)} /> },
       ]}
       fields={[
+        {
+          section: 'Placement & Vertical',
+          name: 'vertical',
+          label: 'Store Vertical',
+          type: 'select',
+          required: true,
+          defaultValue: 'KIRANA',
+          placeholder: 'Select store vertical',
+          hint: 'Controls where this category appears. Kirana categories will only be visible on the Kirana side.',
+          options: [
+            { value: 'KIRANA', label: '🛒 Kirana / Grocery Store Only' },
+            { value: 'MEDICAL', label: '💊 Pharmacy / Medical Store Only' },
+            { value: 'ALL', label: '🌐 All Stores (Both)' },
+          ],
+        },
         {
           section: 'Basic details',
           name: 'name',

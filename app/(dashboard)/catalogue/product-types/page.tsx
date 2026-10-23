@@ -10,44 +10,51 @@ import {
   CatalogueImageNameCell,
   CataloguePlacementCell,
   OrderCell,
+  VerticalCell,
 } from '@/components/shared/catalogue-table-cells';
 
 export default function ProductTypesPage() {
+  const [verticalFilter, setVerticalFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [subcategoryFilter, setSubcategoryFilter] = useState('all');
 
   const { data: categories } = useQuery({
-    queryKey: ['categories-all'],
-    queryFn: async () =>
-      (await api<{ items: Array<{ _id: string; name: string }> }>(`${endpoints.categories}?limit=100`)).data?.items ||
-      [],
+    queryKey: ['categories-all', verticalFilter],
+    queryFn: async () => {
+      const url =
+        verticalFilter !== 'all'
+          ? `${endpoints.categories}?limit=100&vertical=${verticalFilter}`
+          : `${endpoints.categories}?limit=100`;
+      return (await api<{ items: Array<{ _id: string; name: string }> }>(url)).data?.items || [];
+    },
   });
 
   const { data: filterSubs } = useQuery({
-    queryKey: ['subcategories-filter', categoryFilter],
-    queryFn: async () =>
-      categoryFilter !== 'all'
-        ? (
-            await api<{ items: Array<{ _id: string; name: string }> }>(
-              `${endpoints.subcategories}?categoryId=${categoryFilter}&limit=100`,
-            )
-          ).data?.items || []
-        : [],
+    queryKey: ['subcategories-filter', categoryFilter, verticalFilter],
+    queryFn: async () => {
+      if (categoryFilter === 'all') return [];
+      const url =
+        verticalFilter !== 'all'
+          ? `${endpoints.subcategories}?categoryId=${categoryFilter}&vertical=${verticalFilter}&limit=100`
+          : `${endpoints.subcategories}?categoryId=${categoryFilter}&limit=100`;
+      return (await api<{ items: Array<{ _id: string; name: string }> }>(url)).data?.items || [];
+    },
     enabled: categoryFilter !== 'all',
   });
 
   const queryParts: string[] = [];
   if (categoryFilter !== 'all') queryParts.push(`categoryId=${categoryFilter}`);
   if (subcategoryFilter !== 'all') queryParts.push(`subcategoryId=${subcategoryFilter}`);
+  if (verticalFilter !== 'all') queryParts.push(`vertical=${verticalFilter}`);
   const endpoint =
     queryParts.length > 0 ? `${endpoints.productTypes}?${queryParts.join('&')}` : endpoints.productTypes;
 
   return (
     <EntityListPage
       title="Product Types"
-      description="Shared product templates that define which specification attributes apply."
+      description="Shared product templates partitioned by store vertical (Kirana vs Medical)."
       endpoint={endpoint}
-      queryKey={`product-types-${categoryFilter}-${subcategoryFilter}`}
+      queryKey={`product-types-${verticalFilter}-${categoryFilter}-${subcategoryFilter}`}
       searchPlaceholder="Search product types…"
       columns={[
         {
@@ -56,10 +63,25 @@ export default function ProductTypesPage() {
           render: (r) => <CatalogueImageNameCell row={r} imageSize="sm" />,
         },
         { key: 'categoryId', label: 'Placement', render: (r) => <CataloguePlacementCell row={r} /> },
+        { key: 'vertical', label: 'Store Vertical', render: (r) => <VerticalCell row={r} /> },
         { key: 'displayOrder', label: 'Order', render: (r) => <OrderCell value={r.displayOrder} /> },
         { key: 'status', label: 'Status', render: (r) => <StatusBadge status={String(r.status)} /> },
       ]}
       fields={[
+        {
+          section: 'Placement',
+          name: 'vertical',
+          label: 'Store Vertical',
+          type: 'select',
+          defaultValue: 'KIRANA',
+          placeholder: 'Select store vertical',
+          hint: 'Controls visibility. Defaults to Kirana or inherits from parent subcategory.',
+          options: [
+            { value: 'KIRANA', label: '🛒 Kirana / Grocery' },
+            { value: 'MEDICAL', label: '💊 Pharmacy / Medical' },
+            { value: 'ALL', label: '🌐 All Stores (Both)' },
+          ],
+        },
         {
           section: 'Placement',
           name: 'categoryId',
@@ -121,6 +143,24 @@ export default function ProductTypesPage() {
       ]}
       extraFilters={
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Select
+            value={verticalFilter}
+            onValueChange={(v) => {
+              setVerticalFilter(v);
+              setCategoryFilter('all');
+              setSubcategoryFilter('all');
+            }}
+          >
+            <SelectTrigger className="w-full bg-white sm:w-44">
+              <SelectValue placeholder="All Verticals" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Verticals</SelectItem>
+              <SelectItem value="KIRANA">🛒 Kirana Only</SelectItem>
+              <SelectItem value="MEDICAL">💊 Medical Only</SelectItem>
+              <SelectItem value="ALL">🌐 All Stores (Both)</SelectItem>
+            </SelectContent>
+          </Select>
           <Select
             value={categoryFilter}
             onValueChange={(v) => {

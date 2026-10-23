@@ -59,6 +59,7 @@ export const endpoints = {
   productBrands: '/master-products/meta/brands',
   productSubmissions: '/product-submissions',
   sellers: '/sellers',
+  sellerAdminCreate: '/sellers/admin/create',
   sellerApprovals: '/sellers/approvals/list',
   sellerStores: '/sellers/stores',
   sellerStoreCategories: (id: string) => `/sellers/${id}/store/categories`,

@@ -27,17 +27,28 @@ import {
   type AttrMapping,
 } from '@/components/products/product-type-attribute-fields';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 type NamedRef = { _id: string; name: string };
 
 function refName(value: unknown): string {
-  if (value && typeof value === 'object' && 'name' in value) return String((value as NamedRef).name);
-  return '—';
+  if (!value) return '—';
+  let n = '';
+  if (typeof value === 'object' && 'name' in value) n = String((value as NamedRef).name);
+  else n = String(value);
+  n = n.trim();
+  if (n === 'undefined' || n === 'null' || n === '[object Object]') return '—';
+  return n || '—';
 }
 
 function refId(value: unknown): string {
-  if (value && typeof value === 'object' && '_id' in value) return String((value as NamedRef)._id);
-  return value != null ? String(value) : '';
+  if (!value) return '';
+  let id = '';
+  if (typeof value === 'object' && '_id' in value) id = String((value as NamedRef)._id);
+  else id = String(value);
+  id = id.trim();
+  if (id === 'undefined' || id === 'null' || id === '[object Object]') return '';
+  return id;
 }
 
 function parseAttrValue(mapping: AttrMapping | undefined, value: string): string | boolean | number {
@@ -94,6 +105,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
     EMPTY_PRODUCT_INFORMATION,
   );
   const [images, setImages] = useState<Array<{ imageUrl: string; isPrimary: boolean }>>([]);
+  const [selectedVertical, setSelectedVertical] = useState<'KIRANA' | 'MEDICAL'>('KIRANA');
 
   const { data: brands = [] } = useQuery({
     queryKey: ['product-brands'],
@@ -118,10 +130,19 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
   const { data: categories } = useQuery({
     queryKey: ['categories-active'],
     queryFn: async () =>
-      (await api<{ items: Array<{ _id: string; name: string }> }>(`${endpoints.categories}?status=ACTIVE&limit=100`))
+      (await api<{ items: Array<{ _id: string; name: string; vertical?: string; code?: string }> }>(`${endpoints.categories}?status=ACTIVE&limit=100`))
         .data?.items || [],
     enabled: open,
   });
+
+  const filteredCategories = useMemo(() => {
+    if (!categories) return [];
+    const list =
+      selectedVertical === 'MEDICAL'
+        ? categories.filter((c) => c.vertical === 'MEDICAL' || c.code === 'MED')
+        : categories.filter((c) => c.vertical === 'KIRANA' || c.vertical === 'ALL' || (c.vertical !== 'MEDICAL' && c.code !== 'MED'));
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories, selectedVertical]);
 
   const { data: subcategories } = useQuery({
     queryKey: ['subcategories', categoryId],
@@ -171,6 +192,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
   useEffect(() => {
     if (!open) return;
     if (!isEdit) {
+      setSelectedVertical('KIRANA');
       setCategoryId('');
       setSubcategoryId('');
       setProductTypeId('');
@@ -193,6 +215,11 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
     }
     if (!productData?.product) return;
     const p = productData.product;
+    if (p.vertical === 'MEDICAL' || (p as any).isMedicalProduct) {
+      setSelectedVertical('MEDICAL');
+    } else {
+      setSelectedVertical('KIRANA');
+    }
     setCategoryId(refId(p.categoryId));
     setSubcategoryId(refId(p.subcategoryId));
     setProductTypeId(refId(p.productTypeId));
@@ -250,6 +277,8 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
         gtin: form.gtin.trim() || undefined,
         complianceInfo: form.complianceInfo.trim() || undefined,
         status: form.status,
+        vertical: selectedVertical,
+        isMedicalProduct: selectedVertical === 'MEDICAL',
         attributes: attrValues,
         images: cleanedImages,
         productInformation: productInformationToPayload(productInformation),
@@ -302,11 +331,51 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
       title={isEdit ? 'Catalogue placement' : '1. Catalogue placement'}
       description="Pick where this product sits in the catalogue tree."
     >
+      <div className="mb-4 flex items-center gap-3">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Store Vertical:</span>
+        <div className="inline-flex rounded-lg border border-input p-0.5 bg-muted/30">
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedVertical !== 'KIRANA') {
+                setSelectedVertical('KIRANA');
+                setCategoryId('');
+                setSubcategoryId('');
+                setProductTypeId('');
+              }
+            }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all",
+              selectedVertical === 'KIRANA' ? "bg-amber-100 text-amber-900 shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            🛒 Kirana Product
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedVertical !== 'MEDICAL') {
+                setSelectedVertical('MEDICAL');
+                setCategoryId('');
+                setSubcategoryId('');
+                setProductTypeId('');
+              }
+            }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all",
+              selectedVertical === 'MEDICAL' ? "bg-blue-100 text-blue-900 shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            💊 Medical Product
+          </button>
+        </div>
+      </div>
+
       <div className="grid gap-5 sm:grid-cols-3">
         <FormField
           label="Category"
           required
-          hint="Top-level group (e.g. Fresh & Daily Essentials)."
+          hint={selectedVertical === 'MEDICAL' ? 'Medical categories only.' : 'Kirana categories only.'}
         >
           <Select
             value={categoryId || undefined}
@@ -321,7 +390,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
               <SelectValue placeholder="Select a category" />
             </SelectTrigger>
             <SelectContent>
-              {categories?.map((c) => (
+              {filteredCategories?.map((c) => (
                 <SelectItem key={c._id} value={c._id}>
                   {c.name}
                 </SelectItem>
@@ -567,6 +636,7 @@ export function ProductFormDialog({ open, productId, onClose }: ProductFormDialo
               value={productInformation}
               onChange={setProductInformation}
               stepLabel={isEdit ? undefined : '4'}
+              vertical={selectedVertical}
             />
 
             <FormSection

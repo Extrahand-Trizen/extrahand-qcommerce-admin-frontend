@@ -6,9 +6,28 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusBadge } from '@/components/shared/status-badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import {
@@ -20,29 +39,27 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Users,
-  CheckCircle2,
   Clock,
-  AlertTriangle,
+  Timer,
+  Trash2,
+  ChevronRight,
   Search,
-  RotateCcw,
-  MoreHorizontal,
-  ExternalLink,
-  Store,
-  Phone,
-  Mail,
-  Copy,
   Download,
-  ShieldAlert,
-  Power,
+  Plus,
+  Phone,
+  Info,
+  MoreVertical,
+  Store,
+  CheckCircle2,
   ClipboardCheck,
   Eye,
-  Trash2,
-  ChevronDown,
-  Building2,
+  Power,
+  ShieldAlert,
+  Calendar,
+  X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { getCategoryLabel } from '@/lib/seller-onboarding';
 
 export type SellerRow = {
   _id: string;
@@ -76,7 +93,37 @@ export type SellerSummary = {
   approved: number;
 };
 
-type FilterTab = 'all' | 'active' | 'pending_approval' | 'in_progress' | 'inactive' | 'suspended' | 'inactive_suspended';
+type FilterTab = 'current' | 'pending_approval' | 'in_progress' | 'deleted';
+
+// Helper to extract clean initials for avatar (e.g. KV, SR)
+function getInitials(name?: string): string {
+  if (!name) return 'SR';
+  const clean = name.trim();
+  const parts = clean.split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return clean.slice(0, 2).toUpperCase();
+}
+
+// Helper to format Seller ID (e.g. S-1024)
+function getSellerIdDisplay(seller: SellerRow): string {
+  if (seller.userId && /^S-\d+/i.test(seller.userId)) {
+    return seller.userId.toUpperCase();
+  }
+  if (seller.userId && seller.userId.length <= 8) {
+    return `S-${seller.userId}`;
+  }
+  return `S-${seller._id.slice(-4).toUpperCase()}`;
+}
+
+// Helper to format Shop ID (e.g. SH-7732)
+function getShopIdDisplay(seller: SellerRow): string {
+  if (seller.onboarding?._id) {
+    return `SH-${seller.onboarding._id.slice(-4).toUpperCase()}`;
+  }
+  return `SH-${seller._id.slice(-4).toUpperCase()}`;
+}
 
 export default function SellerUsersPage() {
   const router = useRouter();
@@ -85,11 +132,24 @@ export default function SellerUsersPage() {
   // State initialized from URL query params
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [debouncedSearch, setDebouncedSearch] = useState(search);
-  const [tab, setTab] = useState<FilterTab>((searchParams.get('tab') as FilterTab) || 'all');
+  const [tab, setTab] = useState<FilterTab>((searchParams.get('tab') as FilterTab) || 'current');
+  const [accountStatus, setAccountStatus] = useState<string>(searchParams.get('accountStatus') || 'all');
+  const [onboardingFilter, setOnboardingFilter] = useState<string>(searchParams.get('onboarding') || 'all');
+  const [shopType, setShopType] = useState<string>(searchParams.get('shopType') || 'all');
+  const [dateRange, setDateRange] = useState<string>(searchParams.get('dateRange') || 'this_month');
   const [page, setPage] = useState(Number(searchParams.get('page') || '1'));
   const [limit, setLimit] = useState(Number(searchParams.get('limit') || '25'));
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Modals state
   const [deleteTarget, setDeleteTarget] = useState<SellerRow | null>(null);
+  const [isAddSellerOpen, setIsAddSellerOpen] = useState(false);
+  const [newSellerData, setNewSellerData] = useState({
+    fullName: '',
+    mobileNumber: '',
+    email: '',
+    shopName: '',
+    category: 'grocery',
+  });
 
   const qc = useQueryClient();
 
@@ -106,24 +166,32 @@ export default function SellerUsersPage() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
-    if (tab !== 'all') params.set('tab', tab);
+    if (tab !== 'current') params.set('tab', tab);
+    if (accountStatus !== 'all') params.set('accountStatus', accountStatus);
+    if (onboardingFilter !== 'all') params.set('onboarding', onboardingFilter);
+    if (shopType !== 'all') params.set('shopType', shopType);
+    if (dateRange !== 'this_month') params.set('dateRange', dateRange);
     if (page > 1) params.set('page', String(page));
     if (limit !== 25) params.set('limit', String(limit));
     const qs = params.toString();
     const target = qs ? `/sellers/users?${qs}` : '/sellers/users';
     router.replace(target, { scroll: false });
-  }, [debouncedSearch, tab, page, limit, router]);
+  }, [debouncedSearch, tab, accountStatus, onboardingFilter, shopType, dateRange, page, limit, router]);
 
   // Main Query
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['sellers', debouncedSearch, tab, page, limit],
+  const { data, isLoading } = useQuery({
+    queryKey: ['sellers', debouncedSearch, tab, accountStatus, onboardingFilter, shopType, dateRange, page, limit],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
         limit: String(limit),
       });
       if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
-      if (tab !== 'all') params.set('tab', tab);
+      params.set('tab', tab);
+      if (accountStatus !== 'all') params.set('status', accountStatus);
+      if (onboardingFilter !== 'all') params.set('onboardingStatus', onboardingFilter);
+      if (shopType !== 'all') params.set('shopType', shopType);
+      if (dateRange !== 'all') params.set('dateRange', dateRange);
 
       const res = await api<{
         items: SellerRow[];
@@ -159,26 +227,6 @@ export default function SellerUsersPage() {
     onError: (e: Error) => toast.error(e.message || 'Failed to update status'),
   });
 
-  // Bulk Status Mutation
-  const bulkStatusMutation = useMutation({
-    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      return Promise.all(
-        ids.map((id) =>
-          api(`${endpoints.sellers}/${id}/status`, {
-            method: 'PATCH',
-            body: JSON.stringify({ status }),
-          })
-        )
-      );
-    },
-    onSuccess: (_, vars) => {
-      toast.success(`${vars.ids.length} sellers updated to ${vars.status}`);
-      setSelectedIds(new Set());
-      qc.invalidateQueries({ queryKey: ['sellers'] });
-    },
-    onError: (e: Error) => toast.error(e.message || 'Bulk status update failed'),
-  });
-
   // Delete Mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -194,39 +242,28 @@ export default function SellerUsersPage() {
     onError: (e: Error) => toast.error(e.message || 'Failed to delete seller'),
   });
 
-  // Clipboard copy
-  const copyText = (text: string, label: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard`);
-  };
-
-  // Row Selection Handlers
-  const toggleSelectAll = () => {
-    if (selectedIds.size === sellers.length && sellers.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(sellers.map((s) => s._id)));
-    }
-  };
-
-  const toggleSelectOne = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
-  };
-
-  // Reset Filters
-  const handleResetFilters = () => {
-    setSearch('');
-    setDebouncedSearch('');
-    setTab('all');
-    setPage(1);
-    setSelectedIds(new Set());
-  };
-
-  const hasActiveFilters = Boolean(search.trim() || tab !== 'all');
+  // Create Seller Mutation
+  const createSellerMutation = useMutation({
+    mutationFn: async (payload: typeof newSellerData) => {
+      return api('/sellers/admin/create', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Seller account created successfully');
+      setIsAddSellerOpen(false);
+      setNewSellerData({
+        fullName: '',
+        mobileNumber: '',
+        email: '',
+        shopName: '',
+        category: 'grocery',
+      });
+      qc.invalidateQueries({ queryKey: ['sellers'] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to create seller'),
+  });
 
   // Export CSV
   const exportToCSV = (targetRows: SellerRow[]) => {
@@ -236,26 +273,26 @@ export default function SellerUsersPage() {
     }
     const headers = [
       'Seller ID',
+      'Shop ID',
       'Full Name',
+      'Shop Name',
       'Mobile Number',
       'Email',
-      'Shop Name',
-      'Shop Category',
       'Account Status',
-      'Registration Status',
+      'Onboarding Status',
       'Created Date',
     ];
 
     const csvRows = targetRows.map((s) => [
-      `"${s._id}"`,
+      `"${getSellerIdDisplay(s)}"`,
+      `"${getShopIdDisplay(s)}"`,
       `"${s.fullName || ''}"`,
+      `"${s.onboarding?.shopName || ''}"`,
       `"${s.mobileNumber || ''}"`,
       `"${s.email || ''}"`,
-      `"${s.onboarding?.shopName || ''}"`,
-      `"${s.onboarding?.category || s.onboarding?.shopType || ''}"`,
       `"${s.status || ''}"`,
       `"${s.onboardingStatus || ''}"`,
-      `"${s.createdAt ? format(new Date(s.createdAt), 'yyyy-MM-dd') : ''}"`,
+      `"${s.createdAt ? format(new Date(s.createdAt), 'MMM d, yyyy') : ''}"`,
     ]);
 
     const csvContent = [headers.join(','), ...csvRows.map((r) => r.join(','))].join('\n');
@@ -263,703 +300,732 @@ export default function SellerUsersPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `sellers-export-${format(new Date(), 'yyyy-MM-dd-HHmm')}.csv`);
+    link.setAttribute('download', `sellers-management-${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     toast.success(`Exported ${targetRows.length} sellers to CSV`);
   };
 
-  // Formatter for Onboarding / Registration Status
-  const formatRegistrationStatus = (status: string) => {
-    switch (status) {
-      case 'APPROVED':
-        return 'Completed';
-      case 'PENDING_APPROVAL':
-        return 'Pending Approval';
-      case 'CHANGES_REQUIRED':
-        return 'Changes Required';
-      case 'DRAFT':
-        return 'In Progress';
-      case 'REJECTED':
-        return 'Rejected';
-      default:
-        return status;
-    }
+  // Helper Labels for Select Boxes
+  const accountStatusLabels: Record<string, string> = {
+    all: 'All',
+    ACTIVE: 'Active',
+    PENDING: 'Pending',
+    INACTIVE: 'Inactive',
+    SUSPENDED: 'Suspended',
   };
 
+  const onboardingLabels: Record<string, string> = {
+    all: 'All',
+    APPROVED: 'Approved',
+    PENDING_APPROVAL: 'Review Required',
+    IN_PROGRESS: 'In Progress',
+    CHANGES_REQUIRED: 'Changes Required',
+    REJECTED: 'Rejected',
+  };
+
+  const shopTypeLabels: Record<string, string> = {
+    all: 'All',
+    grocery: 'Grocery',
+    supermarket: 'Supermarket',
+    fresh_produce: 'Fresh Produce',
+    dairy: 'Dairy & Bakery',
+    meat: 'Meat & Seafood',
+    pharmacy: 'Pharmacy',
+  };
+
+  const dateRangeLabels: Record<string, string> = {
+    this_month: 'Oct 1, 2026 - Oct 31, 2026',
+    all: 'All Time',
+    today: 'Today',
+    last_7_days: 'Last 7 Days',
+    last_30_days: 'Last 30 Days',
+  };
+
+  // Dynamic KPI counts matching the 4 cards and 4 tabs in the screenshot
+  const currentCount = summary?.total ?? total;
+  const pendingCount = summary?.pendingApproval ?? 0;
+  const inProgressCount = summary?.inProgress ?? 0;
+  const deletedCount = summary?.inactiveSuspended ?? ((summary?.inactive ?? 0) + (summary?.suspended ?? 0));
+
   return (
-    <div className="w-full space-y-5 pb-12">
-      {/* Page Title & Subtitle */}
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <div className="w-full space-y-5 pb-14 text-slate-800">
+      {/* 1. Page Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Seller Users
+          <h1 className="text-2xl sm:text-[26px] font-bold tracking-tight text-slate-900">
+            Seller Management
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Manage identity profiles, account standing, and onboarding status across 1,000+ sellers.
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Manage seller accounts, shops, onboarding and account history.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <Button
             variant="outline"
             size="sm"
             onClick={() => exportToCSV(sellers)}
             disabled={!sellers.length}
-            className="gap-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="h-9.5 px-3.5 gap-2 border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-2xs rounded-lg"
           >
-            <Download className="h-3.5 w-3.5" />
-            Export Page CSV
+            <Download className="h-4 w-4 text-slate-600" />
+            Export CSV
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => setIsAddSellerOpen(true)}
+            className="h-9.5 px-4 gap-1.5 bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-semibold text-xs sm:text-sm shadow-2xs rounded-lg transition-colors"
+          >
+            <Plus className="h-4 w-4 stroke-[2.5]" />
+            Add Seller
           </Button>
         </div>
       </div>
 
-      {/* A. Dashboard Summary Cards (Clickable Filter Shortcuts) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Card 1: Total Sellers */}
+      {/* 2. Top 4 KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+        {/* Card 1: Current Sellers */}
+        <div
+          onClick={() => {
+            setTab('current');
+            setPage(1);
+          }}
+          className={`flex items-center justify-between rounded-xl border bg-white p-4 shadow-2xs transition-all cursor-pointer ${
+            tab === 'current'
+              ? 'border-amber-400 ring-2 ring-amber-400/20'
+              : 'border-slate-200/90 hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 shrink-0">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500">Current Sellers</p>
+              <p className="text-2xl font-bold tracking-tight text-slate-900 mt-0.5">
+                {currentCount}
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+        </div>
+
+        {/* Card 2: Pending Approval */}
+        <div
+          onClick={() => {
+            setTab('pending_approval');
+            setPage(1);
+          }}
+          className={`flex items-center justify-between rounded-xl border bg-white p-4 shadow-2xs transition-all cursor-pointer ${
+            tab === 'pending_approval'
+              ? 'border-amber-400 ring-2 ring-amber-400/20'
+              : 'border-slate-200/90 hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-600 shrink-0">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500">Pending Approval</p>
+              <p className="text-2xl font-bold tracking-tight text-slate-900 mt-0.5">
+                {pendingCount}
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+        </div>
+
+        {/* Card 3: Registration in Progress */}
+        <div
+          onClick={() => {
+            setTab('in_progress');
+            setPage(1);
+          }}
+          className={`flex items-center justify-between rounded-xl border bg-white p-4 shadow-2xs transition-all cursor-pointer ${
+            tab === 'in_progress'
+              ? 'border-amber-400 ring-2 ring-amber-400/20'
+              : 'border-slate-200/90 hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-50 text-sky-600 shrink-0">
+              <Timer className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500">Registration in Progress</p>
+              <p className="text-2xl font-bold tracking-tight text-slate-900 mt-0.5">
+                {inProgressCount}
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+        </div>
+
+        {/* Card 4: Deleted / Archived */}
+        <div
+          onClick={() => {
+            setTab('deleted');
+            setPage(1);
+          }}
+          className={`flex items-center justify-between rounded-xl border bg-white p-4 shadow-2xs transition-all cursor-pointer ${
+            tab === 'deleted'
+              ? 'border-amber-400 ring-2 ring-amber-400/20'
+              : 'border-slate-200/90 hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-rose-50 text-rose-500 shrink-0">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500">Deleted / Archived</p>
+              <p className="text-2xl font-bold tracking-tight text-slate-900 mt-0.5">
+                {deletedCount}
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+        </div>
+      </div>
+
+      {/* 3. Search and Filters Toolbar (ONE SINGLE HORIZONTAL ROW MATCHING REFERENCE IMAGE) */}
+      <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5 sm:gap-3 w-full">
+        {/* Search Input Bar (Expands horizontally) */}
+        <div className="relative flex-1 min-w-[260px]">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search seller, shop, phone, Seller ID or Shop ID..."
+            className="h-10.5 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-9 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs transition-colors"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Dropdowns Row container to guarantee horizontal alignment */}
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Dropdown 1: Account Status */}
+          <div className="w-[145px] shrink-0">
+            <Select
+              value={accountStatus}
+              onValueChange={(val) => {
+                setAccountStatus(val);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-10.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-1 flex items-center justify-between shadow-2xs hover:border-slate-300">
+                <div className="flex flex-col text-left mr-1">
+                  <span className="text-[10px] text-slate-400 font-medium leading-none mb-0.5">
+                    Account Status
+                  </span>
+                  <span className="text-xs font-semibold text-slate-800 leading-tight truncate">
+                    {accountStatusLabels[accountStatus] || 'All'}
+                  </span>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="INACTIVE">Inactive</SelectItem>
+                <SelectItem value="SUSPENDED">Suspended</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Dropdown 2: Onboarding */}
+          <div className="w-[135px] shrink-0">
+            <Select
+              value={onboardingFilter}
+              onValueChange={(val) => {
+                setOnboardingFilter(val);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-10.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-1 flex items-center justify-between shadow-2xs hover:border-slate-300">
+                <div className="flex flex-col text-left mr-1">
+                  <span className="text-[10px] text-slate-400 font-medium leading-none mb-0.5">
+                    Onboarding
+                  </span>
+                  <span className="text-xs font-semibold text-slate-800 leading-tight truncate">
+                    {onboardingLabels[onboardingFilter] || 'All'}
+                  </span>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="APPROVED">Approved</SelectItem>
+                <SelectItem value="PENDING_APPROVAL">Review Required</SelectItem>
+                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                <SelectItem value="CHANGES_REQUIRED">Changes Required</SelectItem>
+                <SelectItem value="REJECTED">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Dropdown 3: Shop Type */}
+          <div className="w-[125px] shrink-0">
+            <Select
+              value={shopType}
+              onValueChange={(val) => {
+                setShopType(val);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-10.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-1 flex items-center justify-between shadow-2xs hover:border-slate-300">
+                <div className="flex flex-col text-left mr-1">
+                  <span className="text-[10px] text-slate-400 font-medium leading-none mb-0.5">
+                    Shop Type
+                  </span>
+                  <span className="text-xs font-semibold text-slate-800 leading-tight truncate">
+                    {shopTypeLabels[shopType] || 'All'}
+                  </span>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="grocery">Grocery</SelectItem>
+                <SelectItem value="supermarket">Supermarket</SelectItem>
+                <SelectItem value="fresh_produce">Fresh Produce</SelectItem>
+                <SelectItem value="dairy">Dairy & Bakery</SelectItem>
+                <SelectItem value="meat">Meat & Seafood</SelectItem>
+                <SelectItem value="pharmacy">Pharmacy</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Dropdown 4: Date Range */}
+          <div className="w-[225px] shrink-0">
+            <Select
+              value={dateRange}
+              onValueChange={(val) => {
+                setDateRange(val);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-10.5 w-full bg-white border border-slate-200 rounded-lg px-3 py-1 flex items-center justify-between shadow-2xs hover:border-slate-300">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
+                  <div className="flex flex-col text-left mr-1 truncate">
+                    <span className="text-[10px] text-slate-400 font-medium leading-none mb-0.5">
+                      Date Range
+                    </span>
+                    <span className="text-xs font-semibold text-slate-800 leading-tight truncate">
+                      {dateRangeLabels[dateRange] || 'Oct 1, 2026 - Oct 31, 2026'}
+                    </span>
+                  </div>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="this_month">Oct 1, 2026 - Oct 31, 2026</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="last_7_days">Last 7 Days</SelectItem>
+                <SelectItem value="last_30_days">Last 30 Days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Tab Pills Bar (EXACTLY THE 4 PILLS FROM REFERENCE IMAGE) */}
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-slate-100/70 p-1 w-fit">
         <button
           type="button"
           onClick={() => {
-            setTab('all');
+            setTab('current');
             setPage(1);
           }}
-          className={`flex items-start justify-between rounded-xl border p-4 text-left transition-all ${
-            tab === 'all'
-              ? 'border-amber-500 bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25 ring-2 ring-amber-400'
-              : 'border-slate-200 bg-white text-slate-900 hover:border-amber-300 hover:shadow-xs'
+          className={`rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold transition-all ${
+            tab === 'current'
+              ? 'bg-[#f59e0b] text-slate-950 shadow-2xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <div className="space-y-1">
-            <p className={`text-xs font-semibold ${tab === 'all' ? 'text-amber-950' : 'text-muted-foreground'}`}>
-              Total Sellers
-            </p>
-            <p className="text-2xl font-bold tracking-tight">
-              {summary?.total ?? total}
-            </p>
-            <p className={`text-[11px] ${tab === 'all' ? 'text-amber-950/80 font-medium' : 'text-slate-500'}`}>
-              All registered accounts
-            </p>
-          </div>
-          <div
-            className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-              tab === 'all' ? 'bg-slate-950 text-amber-300 shadow-2xs' : 'bg-amber-50 text-amber-800 border border-amber-200/50'
-            }`}
-          >
-            <Users className="h-4.5 w-4.5" />
-          </div>
+          Current Sellers ({currentCount})
         </button>
 
-        {/* Card 2: Pending Approvals */}
         <button
           type="button"
           onClick={() => {
             setTab('pending_approval');
             setPage(1);
           }}
-          className={`flex items-start justify-between rounded-xl border p-4 text-left transition-all ${
+          className={`rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold transition-all ${
             tab === 'pending_approval'
-              ? 'border-amber-600 bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25 ring-2 ring-amber-400'
-              : 'border-slate-200 bg-white text-slate-900 hover:border-amber-300 hover:shadow-xs'
+              ? 'bg-[#f59e0b] text-slate-950 shadow-2xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <div className="space-y-1">
-            <p className={`text-xs font-semibold ${tab === 'pending_approval' ? 'text-amber-950' : 'text-muted-foreground'}`}>
-              Pending Approvals
-            </p>
-            <p className="text-2xl font-bold tracking-tight">
-              {summary?.pendingApproval ?? 0}
-            </p>
-            <p className={`text-[11px] ${tab === 'pending_approval' ? 'text-amber-950/80 font-medium' : 'text-amber-700'}`}>
-              KYC awaiting review
-            </p>
-          </div>
-          <div
-            className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-              tab === 'pending_approval' ? 'bg-slate-950 text-amber-300 shadow-2xs' : 'bg-amber-50 text-amber-700 border border-amber-200/50'
-            }`}
-          >
-            <Clock className="h-4.5 w-4.5" />
-          </div>
+          Pending ({pendingCount})
         </button>
 
-        {/* Card 3: Active Sellers */}
         <button
           type="button"
           onClick={() => {
-            setTab('active');
+            setTab('in_progress');
             setPage(1);
           }}
-          className={`flex items-start justify-between rounded-xl border p-4 text-left transition-all ${
-            tab === 'active'
-              ? 'border-amber-500 bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25 ring-2 ring-amber-400'
-              : 'border-slate-200 bg-white text-slate-900 hover:border-amber-300 hover:shadow-xs'
+          className={`rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold transition-all ${
+            tab === 'in_progress'
+              ? 'bg-[#f59e0b] text-slate-950 shadow-2xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <div className="space-y-1">
-            <p className={`text-xs font-semibold ${tab === 'active' ? 'text-amber-950' : 'text-muted-foreground'}`}>
-              Active Sellers
-            </p>
-            <p className="text-2xl font-bold tracking-tight">
-              {summary?.active ?? 0}
-            </p>
-            <p className={`text-[11px] ${tab === 'active' ? 'text-amber-950/80 font-medium' : 'text-amber-700'}`}>
-              Operational accounts
-            </p>
-          </div>
-          <div
-            className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-              tab === 'active' ? 'bg-slate-950 text-amber-300 shadow-2xs' : 'bg-amber-50 text-amber-800 border border-amber-200/50'
-            }`}
-          >
-            <CheckCircle2 className="h-4.5 w-4.5" />
-          </div>
+          Registration in Progress ({inProgressCount})
         </button>
 
-        {/* Card 4: Inactive / Suspended Sellers */}
         <button
           type="button"
           onClick={() => {
-            setTab('inactive_suspended');
+            setTab('deleted');
             setPage(1);
           }}
-          className={`flex items-start justify-between rounded-xl border p-4 text-left transition-all ${
-            tab === 'inactive_suspended' || tab === 'inactive' || tab === 'suspended'
-              ? 'border-amber-500 bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25 ring-2 ring-amber-400'
-              : 'border-slate-200 bg-white text-slate-900 hover:border-amber-300 hover:shadow-xs'
+          className={`rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold transition-all ${
+            tab === 'deleted'
+              ? 'bg-[#f59e0b] text-slate-950 shadow-2xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <div className="space-y-1">
-            <p className={`text-xs font-semibold ${tab === 'inactive_suspended' || tab === 'inactive' || tab === 'suspended' ? 'text-amber-950' : 'text-muted-foreground'}`}>
-              Inactive / Suspended
-            </p>
-            <p className="text-2xl font-bold tracking-tight">
-              {summary?.inactiveSuspended ?? 0}
-            </p>
-            <p className={`text-[11px] ${tab === 'inactive_suspended' || tab === 'inactive' || tab === 'suspended' ? 'text-amber-950/80 font-medium' : 'text-slate-500'}`}>
-              {summary?.inactive ?? 0} inactive &middot; {summary?.suspended ?? 0} suspended
-            </p>
-          </div>
-          <div
-            className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-              tab === 'inactive_suspended' || tab === 'inactive' || tab === 'suspended'
-                ? 'bg-slate-950 text-amber-300 shadow-2xs'
-                : 'bg-amber-50 text-amber-800 border border-amber-200/50'
-            }`}
-          >
-            <AlertTriangle className="h-4.5 w-4.5" />
-          </div>
+          Deleted / Archived ({deletedCount})
         </button>
       </div>
 
-      {/* Main Container Card */}
-      <div className="rounded-xl border border-border bg-white shadow-sm">
-        {/* B. Search and Filters Toolbar */}
-        <div className="p-4 sm:p-5 border-b border-border space-y-3.5">
-          {/* Search Input Bar */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-            <div className="relative flex-1 max-w-xl">
-              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by seller name, shop name, phone, or seller ID..."
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-12 text-sm text-slate-900 placeholder:text-muted-foreground focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-2xs transition-colors"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground hover:text-amber-800"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
+      {/* 5. Info Alert Banner */}
+      <div className="flex items-center gap-2.5 rounded-lg border border-amber-200/70 bg-[#fffbeb] px-4 py-3 text-xs sm:text-sm text-slate-700 shadow-2xs">
+        <Info className="h-4 w-4 text-amber-600 shrink-0" />
+        <span>
+          Deleted shops are hidden from Current Sellers. View historical records in Deleted / Archived.
+        </span>
+      </div>
 
-            {/* Page Size Selector & Reset */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span>Rows:</span>
-                <Select value={String(limit)} onValueChange={(v) => { setLimit(Number(v)); setPage(1); }}>
-                  <SelectTrigger className="h-8.5 w-18 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleResetFilters}
-                  className="h-8.5 text-xs text-muted-foreground hover:text-amber-800 gap-1.5"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  Reset
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Filter Tabs Immediately Below Search */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <button
-              type="button"
-              onClick={() => { setTab('all'); setPage(1); }}
-              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
-                tab === 'all'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs hover:bg-amber-400'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-amber-50/70 hover:border-amber-200 hover:text-amber-950'
-              }`}
-            >
-              All Sellers ({summary?.total ?? total})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab('active'); setPage(1); }}
-              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
-                tab === 'active'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs hover:bg-amber-400'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-amber-50/70 hover:border-amber-200 hover:text-amber-950'
-              }`}
-            >
-              Active ({summary?.active ?? 0})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab('pending_approval'); setPage(1); }}
-              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
-                tab === 'pending_approval'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs hover:bg-amber-400'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-amber-50/70 hover:border-amber-200 hover:text-amber-950'
-              }`}
-            >
-              Pending Approval ({summary?.pendingApproval ?? 0})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab('in_progress'); setPage(1); }}
-              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
-                tab === 'in_progress'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs hover:bg-amber-400'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-amber-50/70 hover:border-amber-200 hover:text-amber-950'
-              }`}
-            >
-              Registration in Progress ({summary?.inProgress ?? 0})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab('inactive'); setPage(1); }}
-              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
-                tab === 'inactive'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs hover:bg-amber-400'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-amber-50/70 hover:border-amber-200 hover:text-amber-950'
-              }`}
-            >
-              Inactive ({summary?.inactive ?? 0})
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab('suspended'); setPage(1); }}
-              className={`rounded-full px-3.5 py-1 text-xs font-medium transition-all ${
-                tab === 'suspended'
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs hover:bg-amber-400'
-                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-amber-50/70 hover:border-amber-200 hover:text-amber-950'
-              }`}
-            >
-              Suspended ({summary?.suspended ?? 0})
-            </button>
-          </div>
-
-          {/* H. Bulk Actions Toolbar (Appears when rows selected) */}
-          {selectedIds.size > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-amber-200 bg-amber-50/80 px-3.5 py-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-amber-900">
-                  {selectedIds.size} {selectedIds.size === 1 ? 'seller' : 'sellers'} selected
-                </span>
-                <span className="text-amber-700">&middot;</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIds(new Set())}
-                  className="text-amber-800 hover:underline font-medium"
-                >
-                  Deselect all
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Button
-                  size="sm"
-                  className="h-7 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold border border-amber-400/60 shadow-2xs"
-                  onClick={() =>
-                    bulkStatusMutation.mutate({
-                      ids: Array.from(selectedIds),
-                      status: 'ACTIVE',
-                    })
-                  }
-                  disabled={bulkStatusMutation.isPending}
-                >
-                  Activate Selected
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs border-amber-300 bg-white text-slate-700 hover:bg-slate-100"
-                  onClick={() =>
-                    bulkStatusMutation.mutate({
-                      ids: Array.from(selectedIds),
-                      status: 'INACTIVE',
-                    })
-                  }
-                  disabled={bulkStatusMutation.isPending}
-                >
-                  Deactivate Selected
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs border-amber-300 bg-white text-slate-800 hover:bg-slate-100"
-                  onClick={() => {
-                    const selectedRows = sellers.filter((s) => selectedIds.has(s._id));
-                    exportToCSV(selectedRows);
-                  }}
-                >
-                  <Download className="mr-1 h-3 w-3" />
-                  Export Selected
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* C. Compact Seller Table */}
+      {/* 6. Clean Data Table Card */}
+      <div className="rounded-xl border border-slate-200/90 bg-white shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent bg-slate-50/70 border-b border-border">
-                <TableHead className="w-[42px] px-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.size === sellers.length && sellers.length > 0}
-                    onChange={toggleSelectAll}
-                    className="h-4 w-4 rounded border-slate-300 accent-amber-500 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                    title="Select all on this page"
-                  />
+              <TableRow className="border-b border-slate-100 bg-slate-50/50 hover:bg-transparent">
+                <TableHead className="min-w-[260px] py-3.5 pl-6 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  SELLER &amp; SHOP
                 </TableHead>
-                <TableHead className="min-w-[240px]">Seller &amp; Shop</TableHead>
-                <TableHead className="min-w-[160px]">Contact</TableHead>
-                <TableHead className="min-w-[130px]">Account Status</TableHead>
-                <TableHead className="min-w-[150px]">Registration Status</TableHead>
-                <TableHead className="min-w-[120px]">Member Since</TableHead>
-                <TableHead className="w-[120px] text-right">Actions</TableHead>
+                <TableHead className="min-w-[160px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  SELLER ID / SHOP ID
+                </TableHead>
+                <TableHead className="min-w-[160px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  CONTACT
+                </TableHead>
+                <TableHead className="min-w-[140px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  ACCOUNT STATUS
+                </TableHead>
+                <TableHead className="min-w-[140px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  ONBOARDING
+                </TableHead>
+                <TableHead className="min-w-[130px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  CREATED
+                </TableHead>
+                <TableHead className="w-[80px] py-3.5 pr-6 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  ACTIONS
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                // Compact Skeleton Loading Rows
-                Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i} className="animate-pulse">
-                    <TableCell className="px-3"><div className="h-4 w-4 rounded bg-slate-200" /></TableCell>
-                    <TableCell>
-                      <div className="space-y-1.5">
-                        <div className="h-4 w-36 rounded bg-slate-200" />
-                        <div className="h-3 w-28 rounded bg-slate-100" />
+                // Skeleton Rows
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="animate-pulse border-b border-slate-100">
+                    <TableCell className="py-4 pl-6">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-slate-200" />
+                        <div className="space-y-1.5">
+                          <div className="h-4 w-32 rounded bg-slate-200" />
+                          <div className="h-3 w-24 rounded bg-slate-100" />
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell><div className="h-3.5 w-24 rounded bg-slate-100" /></TableCell>
-                    <TableCell><div className="h-5 w-20 rounded-full bg-slate-100" /></TableCell>
-                    <TableCell><div className="h-5 w-24 rounded-full bg-slate-100" /></TableCell>
-                    <TableCell><div className="h-3.5 w-20 rounded bg-slate-100" /></TableCell>
-                    <TableCell className="text-right"><div className="ml-auto h-8 w-8 rounded-lg bg-slate-100" /></TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="h-3.5 w-16 rounded bg-slate-200" />
+                        <div className="h-3 w-14 rounded bg-slate-100" />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="h-3.5 w-24 rounded bg-slate-100" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="h-6 w-20 rounded-full bg-slate-100" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="h-6 w-24 rounded-full bg-slate-100" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="h-3.5 w-20 rounded bg-slate-100" />
+                    </TableCell>
+                    <TableCell className="pr-6 text-right">
+                      <div className="ml-auto h-7 w-7 rounded bg-slate-100" />
+                    </TableCell>
                   </TableRow>
                 ))
               ) : sellers.length === 0 ? (
                 // Empty State
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center">
-                    <Users className="mx-auto h-9 w-9 text-slate-300" />
-                    <p className="mt-2 text-sm font-semibold text-slate-900">
-                      {hasActiveFilters ? 'No sellers match your filters' : 'No sellers registered yet'}
+                  <TableCell colSpan={7} className="py-14 text-center">
+                    <Users className="mx-auto h-10 w-10 text-slate-300" />
+                    <p className="mt-2.5 text-sm font-semibold text-slate-900">
+                      No sellers match your criteria
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {hasActiveFilters
-                        ? 'Try searching by another keyword or resetting the filter tabs.'
-                        : 'New seller signups will appear here.'}
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Try searching with another keyword or resetting the filters.
                     </p>
-                    {hasActiveFilters && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleResetFilters}
-                        className="mt-3.5 text-xs gap-1.5"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Clear Filters
-                      </Button>
-                    )}
                   </TableCell>
                 </TableRow>
               ) : (
-                // Live Compact Seller Rows
+                // Table Rows
                 sellers.map((s) => {
-                  const isSelected = selectedIds.has(s._id);
                   const onboarding = s.onboarding;
-                  const shortId = `SH-${s._id.slice(-4).toUpperCase()}`;
+                  const sellerId = getSellerIdDisplay(s);
+                  const shopId = getShopIdDisplay(s);
+                  const initials = getInitials(s.fullName);
                   const isStoreApproved = s.onboardingStatus === 'APPROVED';
                   const isPendingApproval = s.onboardingStatus === 'PENDING_APPROVAL';
+
+                  // Account Status badge configuration
+                  const accountStatusNorm = String(s.status || 'PENDING').toUpperCase();
+                  const isAccountActive = accountStatusNorm === 'ACTIVE';
+                  const isAccountPending = accountStatusNorm === 'PENDING';
+                  const isAccountInactive = accountStatusNorm === 'INACTIVE';
+
+                  // Onboarding badge configuration
+                  const onboardingNorm = String(s.onboardingStatus || 'DRAFT').toUpperCase();
+                  const isOnboardingApproved = onboardingNorm === 'APPROVED';
+                  const isOnboardingReviewReq = onboardingNorm === 'PENDING_APPROVAL' || onboardingNorm === 'CHANGES_REQUIRED';
+                  const isOnboardingInProgress = onboardingNorm === 'DRAFT';
+                  const isOnboardingRejected = onboardingNorm === 'REJECTED';
 
                   return (
                     <TableRow
                       key={s._id}
-                      className={`group transition-colors hover:bg-slate-50/80 ${
-                        isSelected ? 'bg-amber-50/40' : ''
-                      }`}
+                      className="group border-b border-slate-100 transition-colors hover:bg-slate-50/70"
                     >
-                      {/* Checkbox Column */}
-                      <TableCell className="px-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectOne(s._id)}
-                          className="h-4 w-4 rounded border-slate-300 accent-amber-500 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                        />
-                      </TableCell>
+                      {/* 1. SELLER & SHOP */}
+                      <TableCell className="py-4 pl-6">
+                        <div className="flex items-center gap-3">
+                          {/* Circular Avatar with Initials */}
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-200/60 bg-[#fef3c7] text-xs font-semibold text-[#92400e]">
+                            {initials}
+                          </div>
 
-                      {/* 1. Seller & Shop Column */}
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <Link
-                            href={`/sellers/users/${s._id}`}
-                            className="font-semibold text-slate-900 hover:text-amber-700 hover:underline transition-colors flex items-center gap-1.5 text-sm"
-                          >
-                            <span>{s.fullName || 'Unnamed Seller'}</span>
-                          </Link>
-
-                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                            {onboarding?.shopName ? (
-                              <span className="font-medium text-slate-700 flex items-center gap-1">
-                                <Store className="h-3 w-3 text-slate-400" />
-                                {onboarding.shopName}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 italic">Store not setup</span>
-                            )}
-                            <span>&middot;</span>
-                            <button
-                              type="button"
-                              onClick={(e) => copyText(s._id, 'Seller ID', e)}
-                              title="Click to copy full Seller ID"
-                              className="font-mono text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-0.5"
+                          <div className="space-y-0.5">
+                            <Link
+                              href={`/sellers/users/${s._id}`}
+                              className="text-sm font-semibold text-slate-900 transition-colors hover:text-amber-700"
                             >
-                              <span>{shortId}</span>
-                              <Copy className="h-2.5 w-2.5" />
-                            </button>
+                              {s.fullName || 'Unnamed Seller'}
+                            </Link>
+
+                            <p className="text-xs text-slate-500 font-normal">
+                              {onboarding?.shopName || 'Store not setup'}
+                            </p>
                           </div>
                         </div>
                       </TableCell>
 
-                      {/* 2. Contact Column */}
-                      <TableCell>
-                        <div className="space-y-0.5 text-xs">
-                          <div className="font-mono text-slate-800 flex items-center gap-1">
-                            <Phone className="h-3 w-3 text-slate-400" />
-                            <span>{s.mobileNumber || '—'}</span>
-                          </div>
-                          {s.email && (
-                            <div className="text-muted-foreground flex items-center gap-1 truncate max-w-[180px]">
-                              <Mail className="h-3 w-3 text-slate-400" />
-                              <span className="truncate">{s.email}</span>
-                            </div>
-                          )}
+                      {/* 2. SELLER ID / SHOP ID */}
+                      <TableCell className="py-4">
+                        <div className="space-y-0.5">
+                          <p className="text-xs sm:text-sm font-semibold text-slate-900 font-mono">
+                            {sellerId}
+                          </p>
+                          <p className="text-xs text-slate-500 font-mono">
+                            {shopId}
+                          </p>
                         </div>
                       </TableCell>
 
-                      {/* 3. Account Status Column (SEPARATE) */}
-                      <TableCell>
-                        <StatusBadge status={String(s.status || 'PENDING')} />
-                      </TableCell>
-
-                      {/* 4. Registration Status Column (SEPARATE) */}
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-1">
-                          <StatusBadge status={String(s.onboardingStatus || 'DRAFT')} />
-                          {onboarding?.category && (
-                            <span className="text-[10px] text-slate-500">
-                              {getCategoryLabel(String(onboarding.category))}
-                            </span>
-                          )}
+                      {/* 3. CONTACT */}
+                      <TableCell className="py-4">
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-700 font-mono">
+                          <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span>{s.mobileNumber || '—'}</span>
                         </div>
                       </TableCell>
 
-                      {/* 5. Created Date Column */}
-                      <TableCell className="text-xs text-slate-600 font-mono">
+                      {/* 4. ACCOUNT STATUS */}
+                      <TableCell className="py-4">
+                        {isAccountActive ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/70 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            Active
+                          </span>
+                        ) : isAccountPending ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/70 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            Pending
+                          </span>
+                        ) : isAccountInactive ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            Inactive
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200/70 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                            {accountStatusNorm.toLowerCase()}
+                          </span>
+                        )}
+                      </TableCell>
+
+                      {/* 5. ONBOARDING */}
+                      <TableCell className="py-4">
+                        {isOnboardingApproved ? (
+                          <span className="inline-flex items-center justify-center rounded-full border border-emerald-200/70 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                            Approved
+                          </span>
+                        ) : isOnboardingReviewReq ? (
+                          <span className="inline-flex items-center justify-center rounded-full border border-amber-200/70 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                            Review Required
+                          </span>
+                        ) : isOnboardingInProgress ? (
+                          <span className="inline-flex items-center justify-center rounded-full border border-sky-200/70 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                            In Progress
+                          </span>
+                        ) : isOnboardingRejected ? (
+                          <span className="inline-flex items-center justify-center rounded-full border border-rose-200/70 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
+                            Rejected
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                            {onboardingNorm.toLowerCase()}
+                          </span>
+                        )}
+                      </TableCell>
+
+                      {/* 6. CREATED */}
+                      <TableCell className="py-4 text-xs sm:text-sm font-normal text-slate-600">
                         {s.createdAt ? format(new Date(s.createdAt), 'MMM d, yyyy') : '—'}
                       </TableCell>
 
-                      {/* 6. Contextual Row Actions (E) */}
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Quick Primary Shortcut Button */}
-                          {isPendingApproval ? (
+                      {/* 7. ACTIONS */}
+                      <TableCell className="py-4 pr-6 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
                             <Button
-                              asChild
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs border-amber-300 bg-amber-50/60 text-amber-900 hover:bg-amber-100 font-medium"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg ml-auto"
+                              title="Actions"
                             >
-                              <Link href={`/sellers/approvals/${s._id}`}>
-                                Review
-                              </Link>
+                              <MoreVertical className="h-4 w-4" />
                             </Button>
-                          ) : isStoreApproved ? (
-                            <Button
-                              asChild
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs border-slate-200 text-slate-800 hover:bg-slate-50 font-medium"
-                            >
-                              <Link href={`/sellers/stores/${s._id}`}>
-                                Store
-                              </Link>
-                            </Button>
-                          ) : null}
-
-                          {/* Three-Dot Action Dropdown Menu */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7.5 w-7.5 text-slate-500 hover:text-slate-900"
-                                title="Actions"
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52 text-xs">
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/sellers/users/${s._id}`}
+                                className="flex items-center gap-2 cursor-pointer font-medium"
                               >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 text-xs">
-                              {/* Always: View Details */}
+                                <Eye className="h-3.5 w-3.5 text-slate-500" />
+                                View Seller Details
+                              </Link>
+                            </DropdownMenuItem>
+
+                            {isStoreApproved && (
                               <DropdownMenuItem asChild>
                                 <Link
-                                  href={`/sellers/users/${s._id}`}
-                                  className="flex items-center gap-2 cursor-pointer font-medium"
+                                  href={`/sellers/stores/${s._id}`}
+                                  className="flex items-center gap-2 cursor-pointer"
                                 >
-                                  <Eye className="h-3.5 w-3.5 text-slate-500" />
-                                  View Seller Details
+                                  <Store className="h-3.5 w-3.5 text-slate-500" />
+                                  View Store &amp; Products
                                 </Link>
                               </DropdownMenuItem>
+                            )}
 
-                              {/* If store approved: View Store */}
-                              {isStoreApproved && (
-                                <DropdownMenuItem asChild>
-                                  <Link
-                                    href={`/sellers/stores/${s._id}`}
-                                    className="flex items-center gap-2 cursor-pointer"
-                                  >
-                                    <Store className="h-3.5 w-3.5 text-slate-500" />
-                                    View Store &amp; Products
-                                  </Link>
-                                </DropdownMenuItem>
-                              )}
-
-                              {/* If pending approval: Review Application */}
-                              {isPendingApproval && (
-                                <DropdownMenuItem asChild>
-                                  <Link
-                                    href={`/sellers/approvals/${s._id}`}
-                                    className="flex items-center gap-2 cursor-pointer text-amber-700 font-medium"
-                                  >
-                                    <ClipboardCheck className="h-3.5 w-3.5 text-amber-600" />
-                                    Review Application
-                                  </Link>
-                                </DropdownMenuItem>
-                              )}
-
-                              {/* If registration in progress: View Onboarding Progress */}
-                              {(s.onboardingStatus === 'DRAFT' || s.onboardingStatus === 'CHANGES_REQUIRED') && (
-                                <DropdownMenuItem asChild>
-                                  <Link
-                                    href={`/sellers/approvals/${s._id}`}
-                                    className="flex items-center gap-2 cursor-pointer text-slate-700"
-                                  >
-                                    <Clock className="h-3.5 w-3.5 text-slate-500" />
-                                    View Onboarding Progress
-                                  </Link>
-                                </DropdownMenuItem>
-                              )}
-
-                              <DropdownMenuSeparator />
-
-                              {/* Account Status Transitions */}
-                              {s.status === 'ACTIVE' && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={() => statusMutation.mutate({ id: s._id, status: 'INACTIVE' })}
-                                    className="flex items-center gap-2 cursor-pointer text-slate-700"
-                                  >
-                                    <Power className="h-3.5 w-3.5 text-slate-500" />
-                                    Deactivate Seller
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => statusMutation.mutate({ id: s._id, status: 'SUSPENDED' })}
-                                    className="flex items-center gap-2 cursor-pointer text-rose-700"
-                                  >
-                                    <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
-                                    Suspend Account
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-
-                              {s.status === 'INACTIVE' && (
-                                <DropdownMenuItem
-                                  onClick={() => statusMutation.mutate({ id: s._id, status: 'ACTIVE' })}
-                                  className="flex items-center gap-2 cursor-pointer text-emerald-700 font-medium"
+                            {isPendingApproval && (
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/sellers/approvals/${s._id}`}
+                                  className="flex items-center gap-2 cursor-pointer text-amber-700 font-medium"
                                 >
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                                  Activate Seller
-                                </DropdownMenuItem>
-                              )}
-
-                              {s.status === 'SUSPENDED' && (
-                                <DropdownMenuItem
-                                  onClick={() => statusMutation.mutate({ id: s._id, status: 'ACTIVE' })}
-                                  className="flex items-center gap-2 cursor-pointer text-amber-900 hover:text-amber-950 font-medium"
-                                >
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-amber-600" />
-                                  Reactivate Seller
-                                </DropdownMenuItem>
-                              )}
-
-                              {s.status === 'PENDING' && (
-                                <DropdownMenuItem
-                                  onClick={() => statusMutation.mutate({ id: s._id, status: 'ACTIVE' })}
-                                  className="flex items-center gap-2 cursor-pointer text-amber-900 hover:text-amber-950 font-medium"
-                                >
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-amber-600" />
-                                  Activate Account
-                                </DropdownMenuItem>
-                              )}
-
-                              <DropdownMenuSeparator />
-
-                              {/* Hard Delete Option */}
-                              <DropdownMenuItem
-                                onClick={() => setDeleteTarget(s)}
-                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Delete Profile
+                                  <ClipboardCheck className="h-3.5 w-3.5 text-amber-600" />
+                                  Review Application
+                                </Link>
                               </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                            )}
+
+                            <DropdownMenuSeparator />
+
+                            {s.status === 'ACTIVE' && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => statusMutation.mutate({ id: s._id, status: 'INACTIVE' })}
+                                  className="flex items-center gap-2 cursor-pointer text-slate-700"
+                                >
+                                  <Power className="h-3.5 w-3.5 text-slate-500" />
+                                  Deactivate Seller
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => statusMutation.mutate({ id: s._id, status: 'SUSPENDED' })}
+                                  className="flex items-center gap-2 cursor-pointer text-rose-700"
+                                >
+                                  <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
+                                  Suspend Account
+                                </DropdownMenuItem>
+                              </>
+                            )}
+
+                            {s.status === 'INACTIVE' && (
+                              <DropdownMenuItem
+                                onClick={() => statusMutation.mutate({ id: s._id, status: 'ACTIVE' })}
+                                className="flex items-center gap-2 cursor-pointer text-emerald-700 font-medium"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                Activate Seller
+                              </DropdownMenuItem>
+                            )}
+
+                            {s.status === 'SUSPENDED' && (
+                              <DropdownMenuItem
+                                onClick={() => statusMutation.mutate({ id: s._id, status: 'ACTIVE' })}
+                                className="flex items-center gap-2 cursor-pointer text-amber-900 font-medium"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-amber-600" />
+                                Reactivate Seller
+                              </DropdownMenuItem>
+                            )}
+
+                            {s.status === 'PENDING' && (
+                              <DropdownMenuItem
+                                onClick={() => statusMutation.mutate({ id: s._id, status: 'ACTIVE' })}
+                                className="flex items-center gap-2 cursor-pointer text-amber-900 font-medium"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-amber-600" />
+                                Activate Account
+                              </DropdownMenuItem>
+                            )}
+
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuItem
+                              onClick={() => setDeleteTarget(s)}
+                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete Profile
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
@@ -969,9 +1035,9 @@ export default function SellerUsersPage() {
           </Table>
         </div>
 
-        {/* D. Server-Side Pagination Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3.5 border-t border-border gap-3">
-          <div className="text-xs text-muted-foreground">
+        {/* Server-Side Pagination Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-4 border-t border-slate-100 gap-3">
+          <div className="text-xs text-slate-500">
             {total > 0 ? (
               <>
                 Showing <span className="font-semibold text-slate-900">{(page - 1) * limit + 1}</span>–
@@ -994,6 +1060,125 @@ export default function SellerUsersPage() {
           )}
         </div>
       </div>
+
+      {/* Add Seller Dialog */}
+      <Dialog open={isAddSellerOpen} onOpenChange={setIsAddSellerOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900">Add New Seller</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Create a seller profile and initiate onboarding. They will receive access to the seller portal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newSellerData.fullName.trim() || !newSellerData.mobileNumber.trim()) {
+                toast.error('Full Name and Mobile Number are required');
+                return;
+              }
+              createSellerMutation.mutate(newSellerData);
+            }}
+            className="space-y-3.5 py-2"
+          >
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Full Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={newSellerData.fullName}
+                onChange={(e) => setNewSellerData((p) => ({ ...p, fullName: e.target.value }))}
+                placeholder="e.g. Kota Venkatesh"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Mobile Number <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="tel"
+                required
+                maxLength={10}
+                value={newSellerData.mobileNumber}
+                onChange={(e) => setNewSellerData((p) => ({ ...p, mobileNumber: e.target.value.replace(/\D/g, '') }))}
+                placeholder="e.g. 7981580955"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Email Address (Optional)
+              </label>
+              <input
+                type="email"
+                value={newSellerData.email}
+                onChange={(e) => setNewSellerData((p) => ({ ...p, email: e.target.value }))}
+                placeholder="seller@example.com"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Shop Name
+                </label>
+                <input
+                  type="text"
+                  value={newSellerData.shopName}
+                  onChange={(e) => setNewSellerData((p) => ({ ...p, shopName: e.target.value }))}
+                  placeholder="e.g. Venkatesh Testing Prod"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Shop Type
+                </label>
+                <select
+                  value={newSellerData.category}
+                  onChange={(e) => setNewSellerData((p) => ({ ...p, category: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs sm:text-sm text-slate-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                >
+                  <option value="grocery">Grocery</option>
+                  <option value="supermarket">Supermarket</option>
+                  <option value="fresh_produce">Fresh Produce</option>
+                  <option value="dairy">Dairy & Bakery</option>
+                  <option value="meat">Meat & Seafood</option>
+                  <option value="pharmacy">Pharmacy</option>
+                </select>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddSellerOpen(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={createSellerMutation.isPending}
+                className="bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-semibold text-xs"
+              >
+                {createSellerMutation.isPending ? 'Creating...' : 'Create Seller'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmDialog

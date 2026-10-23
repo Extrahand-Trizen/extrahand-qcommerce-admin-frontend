@@ -103,3 +103,47 @@ export function OrderCell({ value }: { value: unknown }) {
   if (value == null || value === '') return <span className="text-muted-foreground">—</span>;
   return <span className="tabular-nums text-sm text-foreground">{String(value)}</span>;
 }
+
+export function VerticalBadge({ vertical, className }: { vertical?: string; className?: string }) {
+  const v = (vertical || 'KIRANA').toUpperCase();
+  if (v === 'MEDICAL') {
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20',
+          className,
+        )}
+      >
+        💊 Medical
+      </span>
+    );
+  }
+  if (v === 'ALL') {
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-600/20',
+          className,
+        )}
+      >
+        🌐 All Stores
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20',
+        className,
+      )}
+    >
+      🛒 Kirana
+    </span>
+  );
+}
+
+export function VerticalCell({ row }: { row: Record<string, unknown> }) {
+  const v = (row?.vertical as string) || 'KIRANA';
+  return <VerticalBadge vertical={v} />;
+}
+

@@ -30,6 +30,7 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [verticalFilter, setVerticalFilter] = useState('all');
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Record<string, unknown> | null>(null);
@@ -48,12 +49,13 @@ export default function ProductsPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['master-products', search, page, statusFilter, categoryFilter],
+    queryKey: ['master-products', search, page, statusFilter, categoryFilter, verticalFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (search.trim()) params.set('search', search.trim());
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (categoryFilter !== 'all') params.set('categoryId', categoryFilter);
+      if (verticalFilter !== 'all') params.set('vertical', verticalFilter);
       const res = await api<{ items: Record<string, unknown>[]; total: number; totalPages: number }>(
         `${endpoints.masterProducts}?${params}`
       );
@@ -135,6 +137,22 @@ export default function ProductsPage() {
                 </SelectContent>
               </Select>
               <Select
+                value={verticalFilter}
+                onValueChange={(v) => {
+                  setVerticalFilter(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-36">
+                  <SelectValue placeholder="Vertical" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Verticals</SelectItem>
+                  <SelectItem value="KIRANA">🛒 Kirana</SelectItem>
+                  <SelectItem value="MEDICAL">💊 Medical</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
                 value={statusFilter}
                 onValueChange={(v) => {
                   setStatusFilter(v);
@@ -195,11 +213,22 @@ export default function ProductsPage() {
                         )}
                       </div>
                       <div>
-                        <p className="font-medium">
-                          <Link href={`/products/${String(p._id)}`} className="hover:text-amber-700 hover:underline">
-                            {String(p.name)}
-                          </Link>
-                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-medium">
+                            <Link href={`/products/${String(p._id)}`} className="hover:text-amber-700 hover:underline">
+                              {String(p.name)}
+                            </Link>
+                          </p>
+                          {p.vertical === 'MEDICAL' || (p as any).isMedicalProduct ? (
+                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20">
+                              💊 Medical
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20">
+                              🛒 Kirana
+                            </span>
+                          )}
+                        </div>
                         {Boolean((p as Record<string, any>).requestedByStore?.shopName || (p as Record<string, any>).requestedByStore?.sellerName) ? (
                           <p className="text-xs font-medium text-amber-700">
                             Store: {String((p as Record<string, any>).requestedByStore?.shopName || (p as Record<string, any>).requestedByStore?.sellerName)}

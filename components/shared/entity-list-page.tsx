@@ -39,6 +39,7 @@ export interface Field {
   dependsOn?: string;
   placeholder?: string;
   hint?: string;
+  defaultValue?: string;
   /** Groups fields in the create/edit dialog */
   section?: string;
   /** API path used to upload an image for imageUrl fields. */
@@ -176,7 +177,11 @@ export function EntityListPage({
 
   function openCreate() {
     setEditing(null);
-    setForm({ status: 'ACTIVE' });
+    const initial: Record<string, string> = { status: 'ACTIVE' };
+    fields.forEach((f) => {
+      if (f.defaultValue) initial[f.name] = f.defaultValue;
+    });
+    setForm(initial);
     setDialogOpen(true);
   }
 
