@@ -175,6 +175,7 @@ export default function SellerStoreDetailPage() {
   // State for Custom Submissions Tab
   const [customStatusFilter, setCustomStatusFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('ALL');
   const [customSearch, setCustomSearch] = useState('');
+  const [deletingCustomSub, setDeletingCustomSub] = useState<ProductSubmissionItem | null>(null);
 
   // State for Price Changes Tab
   const [priceStatusFilter, setPriceStatusFilter] = useState<'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ALL'>('UNDER_REVIEW');
@@ -357,6 +358,20 @@ export default function SellerStoreDetailPage() {
       qc.invalidateQueries({ queryKey: ['seller-stores'] });
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to remove product from store'),
+  });
+
+  const deleteCustomSubMutation = useMutation({
+    mutationFn: async (subId: string) =>
+      api(`${endpoints.productSubmissions}/${subId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Custom product deleted from store and catalogue');
+      setDeletingCustomSub(null);
+      qc.invalidateQueries({ queryKey: ['shop-custom-submissions', id] });
+      qc.invalidateQueries({ queryKey: ['seller-store-products', id] });
+      qc.invalidateQueries({ queryKey: ['seller-store-total-products-count', id] });
+      qc.invalidateQueries({ queryKey: ['master-products'] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete custom product'),
   });
 
   const approvePriceMutation = useMutation({
@@ -1353,9 +1368,21 @@ export default function SellerStoreDetailPage() {
                         {sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, yyyy') : '—'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button asChild size="sm" variant="outline">
-                          <Link href={`/product-submissions/${sub._id}`}>Review</Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/product-submissions/${sub._id}`}>Review</Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            title="Delete custom product"
+                            onClick={() => setDeletingCustomSub(sub)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -2140,6 +2167,46 @@ export default function SellerStoreDetailPage() {
               >
                 <Trash2 className="h-4 w-4" />
                 {deleteListingMutation.isPending ? 'Removing...' : 'Remove Product'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Custom Product Request Confirmation Modal */}
+      {deletingCustomSub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600 border-b pb-3">
+              <Trash2 className="h-6 w-6 shrink-0 text-red-600" />
+              <h3 className="text-lg font-bold text-slate-900">Delete Custom Product</h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              Are you sure you want to delete <strong className="text-slate-900">{deletingCustomSub.submittedProductName}</strong>?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
+              This will permanently delete the custom product from this store inventory and remove it from the catalogue.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDeletingCustomSub(null)}
+                disabled={deleteCustomSubMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+                onClick={() => deleteCustomSubMutation.mutate(deletingCustomSub._id)}
+                disabled={deleteCustomSubMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteCustomSubMutation.isPending ? 'Deleting...' : 'Delete Product'}
               </Button>
             </div>
           </div>
