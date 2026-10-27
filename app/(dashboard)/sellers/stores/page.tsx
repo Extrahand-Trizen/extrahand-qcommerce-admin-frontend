@@ -289,10 +289,13 @@ export default function SellerStoresPage() {
                 store.formattedShopId || `SH-${store.sellerId.slice(-4).toUpperCase()}`;
               const pendingCount = store.pendingProductRequests ?? 0;
               const customCount = store.pendingCustomProductRequests ?? 0;
-              const isUnderReview =
-                store.isUnderReview ||
-                store.sellerStatus?.toLowerCase().includes('review') ||
-                store.onboardingStatus === 'PENDING_APPROVAL';
+              const isKycPending =
+                store.onboardingStatus === 'PENDING_APPROVAL' ||
+                store.onboardingStatus === 'CHANGES_REQUIRED' ||
+                store.onboardingStatus === 'UNDER_REVIEW' ||
+                store.sellerStatus?.toLowerCase() === 'kyc pending';
+              const isStoreActive = store.sellerStatus?.toLowerCase() === 'active';
+              const isStoreSuspended = store.sellerStatus?.toLowerCase() === 'suspended';
 
               return (
                 <div
@@ -312,16 +315,16 @@ export default function SellerStoresPage() {
                         </Link>
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            isUnderReview
+                            isKycPending
                               ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-300'
-                              : store.sellerStatus?.toLowerCase() === 'active'
+                              : isStoreActive
                               ? 'bg-amber-50 text-amber-900 ring-1 ring-amber-400/60'
-                              : store.sellerStatus?.toLowerCase() === 'suspended'
+                              : isStoreSuspended
                               ? 'bg-slate-100 text-slate-700 ring-1 ring-slate-300'
                               : 'bg-slate-100 text-slate-700'
                           }`}
                         >
-                          {isUnderReview ? 'Under review' : store.sellerStatus || 'Active'}
+                          {isKycPending ? 'KYC Pending' : store.sellerStatus || 'Active'}
                         </span>
                       </div>
 

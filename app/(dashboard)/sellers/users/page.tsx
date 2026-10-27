@@ -70,6 +70,7 @@ export type SellerRow = {
   status: 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'REJECTED' | 'DELETED' | string;
   onboardingStatus: 'DRAFT' | 'PENDING_APPROVAL' | 'CHANGES_REQUIRED' | 'APPROVED' | 'REJECTED' | string;
   createdAt?: string;
+  deletedAt?: string;
   lastLoginAt?: string;
   onboarding?: {
     _id?: string;
@@ -79,6 +80,8 @@ export type SellerRow = {
     city?: string;
     state?: string;
     status?: string;
+    mobileNumber?: string;
+    shopMobileNumber?: string;
   } | null;
 };
 
@@ -88,6 +91,7 @@ export type SellerSummary = {
   pendingApproval: number;
   inactive: number;
   suspended: number;
+  deleted?: number;
   inactiveSuspended: number;
   inProgress: number;
   approved: number;
@@ -125,6 +129,19 @@ function getShopIdDisplay(seller: SellerRow): string {
   return `SH-${seller._id.slice(-4).toUpperCase()}`;
 }
 
+// Helper to resolve clean display phone without dummy zeros
+function getDisplayPhone(seller: SellerRow): string {
+  const p = seller.mobileNumber;
+  if (p && !/^0+$/.test(p) && p !== '0000000000') {
+    return p;
+  }
+  const onbPhone = seller.onboarding?.mobileNumber || (seller.onboarding as any)?.shopMobileNumber;
+  if (onbPhone && !/^0+$/.test(onbPhone) && onbPhone !== '0000000000') {
+    return onbPhone;
+  }
+  return '—';
+}
+
 export default function SellerUsersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -136,7 +153,7 @@ export default function SellerUsersPage() {
   const [accountStatus, setAccountStatus] = useState<string>(searchParams.get('accountStatus') || 'all');
   const [onboardingFilter, setOnboardingFilter] = useState<string>(searchParams.get('onboarding') || 'all');
   const [shopType, setShopType] = useState<string>(searchParams.get('shopType') || 'all');
-  const [dateRange, setDateRange] = useState<string>(searchParams.get('dateRange') || 'this_month');
+  const [dateRange, setDateRange] = useState<string>(searchParams.get('dateRange') || 'all');
   const [page, setPage] = useState(Number(searchParams.get('page') || '1'));
   const [limit, setLimit] = useState(Number(searchParams.get('limit') || '25'));
 
@@ -170,7 +187,7 @@ export default function SellerUsersPage() {
     if (accountStatus !== 'all') params.set('accountStatus', accountStatus);
     if (onboardingFilter !== 'all') params.set('onboarding', onboardingFilter);
     if (shopType !== 'all') params.set('shopType', shopType);
-    if (dateRange !== 'this_month') params.set('dateRange', dateRange);
+    if (dateRange !== 'all') params.set('dateRange', dateRange);
     if (page > 1) params.set('page', String(page));
     if (limit !== 25) params.set('limit', String(limit));
     const qs = params.toString();
@@ -188,6 +205,10 @@ export default function SellerUsersPage() {
       });
       if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
       params.set('tab', tab);
+      if (tab === 'deleted') {
+        params.set('sortBy', 'deletedAt');
+        params.set('sortOrder', 'desc');
+      }
       if (accountStatus !== 'all') params.set('status', accountStatus);
       if (onboardingFilter !== 'all') params.set('onboardingStatus', onboardingFilter);
       if (shopType !== 'all') params.set('shopType', shopType);
@@ -281,6 +302,7 @@ export default function SellerUsersPage() {
       'Account Status',
       'Onboarding Status',
       'Created Date',
+      'Deleted Date',
     ];
 
     const csvRows = targetRows.map((s) => [
@@ -288,11 +310,12 @@ export default function SellerUsersPage() {
       `"${getShopIdDisplay(s)}"`,
       `"${s.fullName || ''}"`,
       `"${s.onboarding?.shopName || ''}"`,
-      `"${s.mobileNumber || ''}"`,
+      `"${getDisplayPhone(s)}"`,
       `"${s.email || ''}"`,
       `"${s.status || ''}"`,
       `"${s.onboardingStatus || ''}"`,
       `"${s.createdAt ? format(new Date(s.createdAt), 'MMM d, yyyy') : ''}"`,
+      `"${s.deletedAt ? format(new Date(s.deletedAt), 'MMM d, yyyy') : ''}"`,
     ]);
 
     const csvContent = [headers.join(','), ...csvRows.map((r) => r.join(','))].join('\n');
@@ -335,9 +358,10 @@ export default function SellerUsersPage() {
     pharmacy: 'Pharmacy',
   };
 
+  const currentMonthLabel = `This Month (${format(new Date(), 'MMM yyyy')})`;
   const dateRangeLabels: Record<string, string> = {
-    this_month: 'Oct 1, 2026 - Oct 31, 2026',
     all: 'All Time',
+    this_month: currentMonthLabel,
     today: 'Today',
     last_7_days: 'Last 7 Days',
     last_30_days: 'Last 30 Days',
@@ -347,7 +371,7 @@ export default function SellerUsersPage() {
   const currentCount = summary?.total ?? total;
   const pendingCount = summary?.pendingApproval ?? 0;
   const inProgressCount = summary?.inProgress ?? 0;
-  const deletedCount = summary?.inactiveSuspended ?? ((summary?.inactive ?? 0) + (summary?.suspended ?? 0));
+  const deletedCount = summary?.deleted ?? summary?.inactiveSuspended ?? ((summary?.inactive ?? 0) + (summary?.suspended ?? 0));
 
   return (
     <div className="w-full space-y-5 pb-14 text-slate-800">
@@ -623,14 +647,14 @@ export default function SellerUsersPage() {
                       Date Range
                     </span>
                     <span className="text-xs font-semibold text-slate-800 leading-tight truncate">
-                      {dateRangeLabels[dateRange] || 'Oct 1, 2026 - Oct 31, 2026'}
+                      {dateRangeLabels[dateRange] || 'All Time'}
                     </span>
                   </div>
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="this_month">Oct 1, 2026 - Oct 31, 2026</SelectItem>
                 <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="this_month">{currentMonthLabel}</SelectItem>
                 <SelectItem value="today">Today</SelectItem>
                 <SelectItem value="last_7_days">Last 7 Days</SelectItem>
                 <SelectItem value="last_30_days">Last 30 Days</SelectItem>
@@ -732,8 +756,8 @@ export default function SellerUsersPage() {
                 <TableHead className="min-w-[140px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
                   ONBOARDING
                 </TableHead>
-                <TableHead className="min-w-[130px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  CREATED
+                <TableHead className="min-w-[150px] py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  {tab === 'deleted' ? 'DELETED / CREATED' : 'CREATED'}
                 </TableHead>
                 <TableHead className="w-[80px] py-3.5 pr-6 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                   ACTIONS
@@ -857,7 +881,7 @@ export default function SellerUsersPage() {
                       <TableCell className="py-4">
                         <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-slate-700 font-mono">
                           <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <span>{s.mobileNumber || '—'}</span>
+                          <span>{getDisplayPhone(s)}</span>
                         </div>
                       </TableCell>
 
@@ -911,9 +935,22 @@ export default function SellerUsersPage() {
                         )}
                       </TableCell>
 
-                      {/* 6. CREATED */}
+                      {/* 6. CREATED / DELETED */}
                       <TableCell className="py-4 text-xs sm:text-sm font-normal text-slate-600">
-                        {s.createdAt ? format(new Date(s.createdAt), 'MMM d, yyyy') : '—'}
+                        {tab === 'deleted' ? (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-rose-600 font-medium">
+                              <span className="text-[10px] uppercase font-bold text-rose-500">Deleted:</span>
+                              <span>{s.deletedAt ? format(new Date(s.deletedAt), 'MMM d, yyyy') : s.createdAt ? format(new Date(s.createdAt), 'MMM d, yyyy') : '—'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+                              <span className="text-[10px] uppercase font-medium">Created:</span>
+                              <span>{s.createdAt ? format(new Date(s.createdAt), 'MMM d, yyyy') : '—'}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          s.createdAt ? format(new Date(s.createdAt), 'MMM d, yyyy') : '—'
+                        )}
                       </TableCell>
 
                       {/* 7. ACTIONS */}

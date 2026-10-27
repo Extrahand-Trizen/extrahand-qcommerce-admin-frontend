@@ -220,7 +220,13 @@ export default function SellerUserDetailPage() {
                 <span>&middot;</span>
                 <span className="font-mono flex items-center gap-1">
                   <Phone className="h-3 w-3" />
-                  {seller?.mobileNumber || onboarding?.mobileNumber || '—'}
+                  {(() => {
+                    const p = seller?.mobileNumber;
+                    if (p && !/^0+$/.test(p) && p !== '0000000000') return p;
+                    const onbP = onboarding?.mobileNumber || onboarding?.shopMobileNumber;
+                    if (onbP && !/^0+$/.test(onbP) && onbP !== '0000000000') return onbP;
+                    return '—';
+                  })()}
                 </span>
                 {seller?.email && (
                   <>
@@ -441,9 +447,12 @@ export default function SellerUserDetailPage() {
                 </div>
 
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <span className="text-muted-foreground">PAN Status:</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">PAN Status:</span>
+                    <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/60 px-1.5 py-0.2 rounded">Optional</span>
+                  </div>
                   <p className="font-semibold text-slate-900 mt-1">
-                    {onboarding.panVerificationStatus || 'NOT_VERIFIED'}
+                    {onboarding.panVerificationStatus || (onboarding.pan ? 'VERIFIED' : 'NOT_VERIFIED')}
                   </p>
                   {onboarding.pan && (
                     <p className="font-mono text-[11px] text-slate-500 mt-0.5">{onboarding.pan}</p>
@@ -461,9 +470,12 @@ export default function SellerUserDetailPage() {
                 </div>
 
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <span className="text-muted-foreground">Bank Account:</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Bank Account:</span>
+                    <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/60 px-1.5 py-0.2 rounded">Optional</span>
+                  </div>
                   <p className="font-semibold text-slate-900 mt-1">
-                    {onboarding.bankAccount?.bankName || 'Bank Provided'}
+                    {onboarding.bankAccount?.bankName || (onboarding.bankAccount?.accountNumber ? 'Bank Provided' : 'Not Provided')}
                   </p>
                   {onboarding.bankAccount?.accountNumber && (
                     <p className="font-mono text-[11px] text-slate-500 mt-0.5">

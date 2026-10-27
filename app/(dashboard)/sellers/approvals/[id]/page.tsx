@@ -929,15 +929,15 @@ export default function SellerApprovalDetailPage() {
               </div>
             </div>
 
-            {/* 3. PAN Verification (Mandatory) */}
+            {/* 3. PAN Verification (Optional) */}
             <div className="space-y-3 rounded-lg border p-4 bg-muted/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     PAN
                   </h4>
-                  <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
-                    Mandatory
+                  <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                    Optional
                   </span>
                 </div>
                 <StatusBadge status={String(o.panVerificationStatus || 'NOT_VERIFIED')} />
@@ -1002,9 +1002,9 @@ export default function SellerApprovalDetailPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50/70 p-2 rounded border border-amber-200">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                      <span>No document photo uploaded</span>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50/70 p-2 rounded border border-slate-200">
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                      <span>Not provided (Optional)</span>
                     </div>
                   )}
                 </div>
@@ -1203,8 +1203,8 @@ export default function SellerApprovalDetailPage() {
                 <CreditCard className="h-4 w-4 text-amber-600" />
                 Bank Account & Payout Information
               </CardTitle>
-              <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
-                Mandatory
+              <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                Optional
               </span>
             </div>
             {bankAccount?.verificationStatus ? (
@@ -1306,13 +1306,13 @@ export default function SellerApprovalDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-lg border border-amber-300/80 bg-amber-50/50 p-6 text-center space-y-2">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-6 text-center space-y-2">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600">
                 <CreditCard className="h-5 w-5" />
               </div>
-              <h4 className="text-sm font-semibold text-amber-950">Bank Account Details Missing</h4>
-              <p className="text-xs text-amber-800 max-w-md mx-auto">
-                No bank account details or passbook proof recorded for this seller. A verified bank account is required for payout settlements.
+              <h4 className="text-sm font-semibold text-slate-800">Bank Account Details Not Provided (Optional)</h4>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                No bank account details or passbook proof recorded for this seller. Seller can provide bank details later for automated settlements.
               </p>
             </div>
           )}
