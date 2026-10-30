@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api, endpoints } from '@/lib/api';
 import {
   IndianRupee,
@@ -73,15 +74,37 @@ export default function SellerPayoutsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const searchParams = useSearchParams();
+  const initialSellerId = searchParams.get('sellerId') || 'all';
+
   // Filters
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [shopFilter, setShopFilter] = useState(initialSellerId);
   const [dateRange, setDateRange] = useState('all');
+  const [stores, setStores] = useState<Array<{ sellerId: string; shopName: string }>>([]);
 
   // Detail Modal
   const [selectedPayoutId, setSelectedPayoutId] = useState<string | null>(null);
   const [detailPayout, setDetailPayout] = useState<PayoutDetailResponse['payout'] | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Fetch approved shops for dropdown filter
+  useEffect(() => {
+    async function loadStores() {
+      try {
+        const res = await api<{ items: Array<{ sellerId: string; shopName: string }> }>(
+          `${endpoints.sellerStores}?limit=100`
+        );
+        if (res.data?.items) {
+          setStores(res.data.items);
+        }
+      } catch (e) {
+        console.error('Failed to load stores for payouts filter', e);
+      }
+    }
+    loadStores();
+  }, []);
 
   const fetchPayouts = useCallback(async () => {
     setLoading(true);
@@ -93,6 +116,9 @@ export default function SellerPayoutsPage() {
 
       if (statusFilter && statusFilter !== 'all') {
         params.set('status', statusFilter);
+      }
+      if (shopFilter && shopFilter !== 'all') {
+        params.set('sellerId', shopFilter);
       }
       if (search.trim()) {
         params.set('search', search.trim());
@@ -129,7 +155,7 @@ export default function SellerPayoutsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, search, dateRange]);
+  }, [page, statusFilter, shopFilter, search, dateRange]);
 
   useEffect(() => {
     fetchPayouts();
@@ -283,6 +309,26 @@ export default function SellerPayoutsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Shop Filter Dropdown */}
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-gray-500" />
+            <select
+              value={shopFilter}
+              onChange={(e) => {
+                setShopFilter(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none max-w-[200px]"
+            >
+              <option value="all">All Stores &amp; Shops</option>
+              {stores.map((s) => (
+                <option key={s.sellerId} value={s.sellerId}>
+                  {s.shopName}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-500" />
             <select
@@ -317,6 +363,22 @@ export default function SellerPayoutsPage() {
               <option value="30days">Last 30 Days</option>
             </select>
           </div>
+
+          {(search.trim() || statusFilter !== 'all' || shopFilter !== 'all' || dateRange !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('all');
+                setShopFilter('all');
+                setDateRange('all');
+                setPage(1);
+              }}
+              className="text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors px-2 py-1"
+            >
+              Reset
+            </button>
+          )}
         </div>
       </div>
 

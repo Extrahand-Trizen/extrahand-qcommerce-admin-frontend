@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api, endpoints } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,14 +100,35 @@ export default function SellerOffersPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const searchParams = useSearchParams();
+  const initialSellerId = searchParams.get('sellerId') || '';
+
   // Filters
   const [offerType, setOfferType] = useState<string>('ALL');
   const [status, setStatus] = useState<string>('ALL');
   const [search, setSearch] = useState<string>('');
-  const [sellerId, setSellerId] = useState<string>('');
+  const [sellerId, setSellerId] = useState<string>(initialSellerId);
+  const [stores, setStores] = useState<Array<{ sellerId: string; shopName: string }>>([]);
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalItems, setTotalItems] = useState<number>(0);
+
+  // Fetch approved shops for dropdown filter
+  useEffect(() => {
+    async function loadStores() {
+      try {
+        const res = await api<{ items: Array<{ sellerId: string; shopName: string }> }>(
+          `${endpoints.sellerStores}?limit=100`
+        );
+        if (res.data?.items) {
+          setStores(res.data.items);
+        }
+      } catch (e) {
+        console.error('Failed to load stores for offers filter', e);
+      }
+    }
+    loadStores();
+  }, []);
 
   // Stats
   const [summary, setSummary] = useState({
@@ -297,35 +319,41 @@ export default function SellerOffersPage() {
               />
             </div>
 
-            {/* Offer Type Filter */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto">
-              <button
-                type="button"
-                onClick={() => { setOfferType('ALL'); setPage(1); }}
-                className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  offerType === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
+            {/* Offer Type Filter Dropdown */}
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Tag className="w-4 h-4 text-slate-400 shrink-0" />
+              <select
+                value={offerType}
+                onChange={(e) => {
+                  setOfferType(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full md:w-36 h-9 text-xs font-medium bg-slate-50 border border-slate-200 rounded-md px-3 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400"
               >
-                All Types
-              </button>
-              <button
-                type="button"
-                onClick={() => { setOfferType('COUPON'); setPage(1); }}
-                className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  offerType === 'COUPON' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
+                <option value="ALL">All Types</option>
+                <option value="COUPON">Coupons</option>
+                <option value="PRICE_DROP">Price Drops</option>
+              </select>
+            </div>
+
+            {/* Shop Filter Dropdown */}
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Store className="w-4 h-4 text-slate-400 shrink-0" />
+              <select
+                value={sellerId}
+                onChange={(e) => {
+                  setSellerId(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full md:w-48 h-9 text-xs font-medium bg-slate-50 border border-slate-200 rounded-md px-3 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400"
               >
-                Coupons
-              </button>
-              <button
-                type="button"
-                onClick={() => { setOfferType('PRICE_DROP'); setPage(1); }}
-                className={`flex-1 md:flex-none px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  offerType === 'PRICE_DROP' ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Price Drops
-              </button>
+                <option value="">All Stores &amp; Shops</option>
+                {stores.map((s) => (
+                  <option key={s.sellerId} value={s.sellerId}>
+                    {s.shopName}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Status Filter Dropdown */}
@@ -334,7 +362,7 @@ export default function SellerOffersPage() {
               <select
                 value={status}
                 onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-                className="w-full md:w-40 h-9 text-xs font-medium bg-slate-50 border border-slate-200 rounded-md px-3 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="w-full md:w-36 h-9 text-xs font-medium bg-slate-50 border border-slate-200 rounded-md px-3 py-1 text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="active">Active</option>
@@ -344,6 +372,23 @@ export default function SellerOffersPage() {
                 <option value="exhausted">Limit Reached</option>
               </select>
             </div>
+
+            {/* Reset Button */}
+            {(search.trim() || offerType !== 'ALL' || status !== 'ALL' || sellerId) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setOfferType('ALL');
+                  setStatus('ALL');
+                  setSellerId('');
+                  setPage(1);
+                }}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors px-2 py-1"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </CardContent>
       </Card>
