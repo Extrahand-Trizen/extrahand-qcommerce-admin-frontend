@@ -57,6 +57,10 @@ type ProductSubmissionItem = {
   brand?: string;
   genericName?: string;
   isMedicalProduct?: boolean;
+  isOtherProduct?: boolean;
+  customCategoryName?: string;
+  customSubcategoryName?: string;
+  customProductTypeName?: string;
   prescriptionRequired?: boolean;
   prescriptionCategory?: string;
   medicalCategory?: string;
@@ -698,6 +702,11 @@ export default function ProductSubmissionsPage() {
                               >
                                 {String(s.submittedProductName || '—')}
                               </Link>
+                              {Boolean((s as any).isSeasonalProduct || (s as any).festival) && (
+                                <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/30">
+                                  🪔 {String((s as any).seasonalSubcategory || (s as any).festival || 'Seasonal')}
+                                </span>
+                              )}
                               {Boolean(s.isMedicalProduct || s.genericName) && (
                                 <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20">
                                   Medical
@@ -711,6 +720,11 @@ export default function ProductSubmissionsPage() {
                                           : 'OTC'
                                       }`
                                     : ''}
+                                </span>
+                              )}
+                              {Boolean(s.isOtherProduct) && (
+                                <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-inset ring-violet-600/20">
+                                  Other Products
                                 </span>
                               )}
                             </div>
@@ -729,11 +743,14 @@ export default function ProductSubmissionsPage() {
 
                             <p className="mt-0.5 text-[11px] text-slate-500 font-medium">
                               {[
-                                (s.medicalCategory as string) ||
+                                s.customCategoryName ||
+                                  (s.medicalCategory as string) ||
                                   (typeof s.categoryId === 'object' && (s.categoryId as any)?.name),
-                                (s.medicalSubcategory as string) ||
+                                s.customSubcategoryName ||
+                                  (s.medicalSubcategory as string) ||
                                   (typeof s.subcategoryId === 'object' && (s.subcategoryId as any)?.name),
-                                (s.productType as string) ||
+                                s.customProductTypeName ||
+                                  (s.productType as string) ||
                                   (typeof s.productTypeId === 'object' && (s.productTypeId as any)?.name),
                               ]
                                 .filter(Boolean)

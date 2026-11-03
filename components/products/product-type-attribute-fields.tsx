@@ -19,6 +19,17 @@ export type AttrMapping = {
   isRequired: boolean;
 };
 
+function getMultiSelectValues(value: string | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {
+    return value.split(',').map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 const ATTR_HINTS: Record<string, string> = {
   sold_as: 'How this item is sold — Pack, Loose, or Piece',
   variety: 'Specific variety if applicable — e.g. Royal Gala, Robusta',
@@ -144,6 +155,31 @@ function renderAttributeControl(
           <SelectItem value="true">Yes</SelectItem>
         </SelectContent>
       </Select>
+    );
+  }
+
+  if (attr.type === 'MULTI_SELECT') {
+    const selected = getMultiSelectValues(attributes[attr._id]);
+    const options = attr.options || [];
+    const missingOptions = selected.filter((value) => !options.some((option) => option.value === value));
+    return (
+      <div className="space-y-2">
+        {[...missingOptions.map((value) => ({ value, label: value })), ...options].map((option) => (
+          <label key={option.value} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={selected.includes(option.value)}
+              onChange={(event) => {
+                const next = event.target.checked
+                  ? [...selected, option.value]
+                  : selected.filter((value) => value !== option.value);
+                onChange({ ...attributes, [attr._id]: JSON.stringify(next) });
+              }}
+            />
+            {option.label || option.value}
+          </label>
+        ))}
+      </div>
     );
   }
 

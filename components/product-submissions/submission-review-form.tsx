@@ -39,6 +39,87 @@ import { toast } from 'sonner';
 
 type NamedRef = { _id: string; name: string };
 
+const SEASONAL_SPECIFICATION_OPTIONS: Record<string, string[]> = {
+  lightTechnology: ['LED', 'Rice Bulb / Incandescent', 'Solar LED', 'Neon Flex'],
+  powerSource: ['Plug-in (AC 220V)', 'Battery Operated', 'USB Powered', 'Solar Powered'],
+  waxType: ['Paraffin Wax', 'Soy Wax', 'Beeswax', 'Gel Wax', 'Palm Wax', 'Blended Wax'],
+  packagingType: [
+    'Wooden Box / Crate',
+    'Hardboard Gift Box',
+    'Wicker / Cane Basket',
+    'Tin Box / Metal Caddy',
+    'Jute / Fabric Potli Bag',
+    'Corrugated Decorative Box',
+    'Tray with Cellophane Wrap',
+  ],
+};
+
+const SEASONAL_PRODUCT_TYPE_SPECIFICATION_KEYS = [
+  'productType',
+  'diyaType',
+  'lightType',
+  'candleType',
+  'rangoliProductType',
+  'decorationType',
+  'hamperType',
+  'poojaItemType',
+  'itemType',
+];
+
+const MEDICAL_DROPDOWN_OPTIONS: Record<string, string[]> = {
+  dosageForm: [
+    'Tablet', 'Capsule', 'Dispersible tablet', 'Chewable tablet', 'Sublingual tablet',
+    'Effervescent tablet', 'Modified-release tablet', 'Oral powder', 'Granules', 'Sachet',
+    'Syrup', 'Oral suspension', 'Oral solution', 'Drops (oral)', 'Cream', 'Ointment', 'Gel',
+    'Lotion', 'Foam', 'Medicated shampoo', 'Eye drops', 'Eye ointment', 'Ear drops',
+    'Nasal drops', 'Nasal spray', 'Throat spray', 'Inhaler', 'Nebuliser solution', 'Injection',
+    'Infusion', 'Vial', 'Ampoule', 'Suppository', 'Pessary', 'Transdermal patch', 'Mouthwash',
+    'Lozenge', 'Spray', 'Device', 'Dressing', 'Test strip', 'Kit', 'Other',
+  ],
+  routeOfAdmin: [
+    'Oral', 'Sublingual/Buccal', 'Topical', 'Ophthalmic (eye)', 'Otic (ear)', 'Nasal',
+    'Inhalation', 'Injection', 'Intravenous infusion', 'Rectal', 'Vaginal', 'Transdermal',
+    'Dental/Oral cavity', 'External use', 'Device/Non-medicinal', 'Other',
+  ],
+  strengthUnit: [
+    'mg', 'mcg', 'g', 'mg/mL', 'mcg/mL', 'mg/5 mL', 'g/100 g', '% w/w', '% w/v', '% v/v',
+    'IU', 'IU/mL', 'mEq', 'mmol/L', 'CFU', 'units/actuation', 'mg/actuation', 'Other',
+    'Not applicable',
+  ],
+  packagingType: [
+    'tablet', 'capsule', 'strip', 'blister', 'bottle', 'mL bottle', 'vial', 'ampoule',
+    'prefilled syringe', 'tube', 'sachet', 'syringe', 'inhaler', 'patch', 'suppository',
+    'pessary', 'piece', 'pair', 'roll', 'box', 'kit', 'test', 'test strip', 'device', 'pack',
+    'Other',
+  ],
+  releaseType: [
+    'Immediate release', 'Delayed release', 'Extended/modified release', 'Enteric-coated',
+    'Sustained release', 'Not applicable', 'Other',
+  ],
+  productForm: ['Solid', 'Liquid', 'Semi-solid', 'Gas / Aerosol', 'Powder / Granules'],
+  storageCondition: [
+    'As per product label', 'Room temperature (label-defined)', 'Protect from light',
+    'Keep refrigerated (label-defined)', 'Do not freeze', 'Keep frozen (label-defined)',
+    'Protect from moisture', 'Store in a dry place', 'Cold-chain product - verify exact range',
+    'Other',
+  ],
+  sterility: ['Sterile', 'Non-sterile', 'Not applicable', 'Unknown - verify label'],
+  useType: [
+    'Single-use', 'Reusable', 'Single-patient use', 'Not applicable', 'Unknown - verify label',
+  ],
+  countryOfOrigin: ['India', 'Other - specify', 'Unknown - verify label'],
+  prescriptionCategory: [
+    'Prescription status not verified', 'Non-prescription / OTC (verified)',
+    'Prescription required (verified)', 'Schedule H (verified)', 'Schedule H1 (verified)',
+    'Schedule X (verified)', 'Other restricted category (verified)',
+    'Not applicable - device/non-medicine',
+  ],
+  unitOfSale: [
+    'tablet', 'capsule', 'strip', 'bottle', 'mL', 'vial', 'ampoule', 'tube', 'sachet',
+    'piece', 'pair', 'roll', 'box', 'kit', 'device', 'test', 'test strip', 'pack', 'Other',
+  ],
+};
+
 export type SubmissionReviewPayload = {
   action: 'APPROVE' | 'REJECT' | 'CHANGES_REQUIRED';
   adminComment?: string;
@@ -52,13 +133,29 @@ export type SubmissionReviewPayload = {
   sku?: string;
   gtin?: string;
   complianceInfo?: string;
-  attributes?: Array<{ attributeId: string; value: string | number | boolean }>;
+  attributes?: Array<{ attributeId: string; value: string | number | boolean | string[] }>;
   images?: ProductImageDraft[];
   productInformation?: ReturnType<typeof productInformationToPayload>;
   sellingPricePaise?: number;
   quantity?: number;
   lifespanValue?: number;
   lifespanUnit?: string;
+  seasonalDetails?: {
+    festival?: string;
+    seasonalSubcategory?: string;
+    specifications?: Record<string, unknown>;
+    manufacturerDetails?: Record<string, unknown>;
+    complianceDetails?: Record<string, unknown>;
+    availableFrom?: string;
+    availableUntil?: string;
+    certificationDocUrl?: string;
+    customAttributes?: Array<{ label: string; value: string }>;
+  };
+  otherProductDetails?: {
+    countryOfOrigin?: string;
+    manufacturerDetails?: Record<string, unknown>;
+    customAttributes?: Array<{ label: string; value: string }>;
+  };
   createSellerListing?: boolean;
   addToMasterCatalogue?: boolean;
 };
@@ -103,9 +200,18 @@ function refId(value: unknown): string {
   return id;
 }
 
-function parseAttrValue(mapping: AttrMapping | undefined, value: string): string | boolean | number {
+function parseAttrValue(mapping: AttrMapping | undefined, value: string): string | boolean | number | string[] {
   if (mapping?.attributeId.type === 'BOOLEAN') {
     return value === 'true' || value === 'Yes';
+  }
+  if (mapping?.attributeId.type === 'MULTI_SELECT') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      return value.split(',').map((item) => item.trim()).filter(Boolean);
+    }
+    return [];
   }
   if (mapping?.attributeId.type === 'NUMBER') {
     return Number(value);
@@ -126,6 +232,266 @@ function parsePriceToPaise(value: string): number | undefined {
   return Math.round(rupees * 100);
 }
 
+function getDateInputValue(value: unknown): string {
+  if (!value) return '';
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+}
+
+function getStructuredRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getCustomAttributeRows(value: unknown): Array<{ label: string; value: string }> {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is { label: string; value: string } =>
+          Boolean(item && typeof item === 'object' && 'label' in item && 'value' in item),
+        )
+        .map((item) => ({ label: String(item.label || ''), value: String(item.value || '') }))
+    : [];
+}
+
+function formatFieldLabel(key: string): string {
+  return key.replace(/([A-Z])/g, ' $1').replace(/^./, (character) => character.toUpperCase());
+}
+
+function includeCurrentOption(options: string[], currentValue: string): string[] {
+  return Array.from(new Set([...options.filter(Boolean), ...(currentValue ? [currentValue] : [])]));
+}
+
+function ReviewSelect({
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  const availableOptions = includeCurrentOption(options, value);
+  return (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {availableOptions.map((option) => (
+          <SelectItem key={option} value={option}>{option}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function StructuredRecordEditor({
+  title,
+  value,
+  onChange,
+  dropdownOptions = {},
+  allowOtherFor = [],
+}: {
+  title: string;
+  value: Record<string, unknown>;
+  onChange: (value: Record<string, unknown>) => void;
+  dropdownOptions?: Record<string, string[]>;
+  allowOtherFor?: string[];
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [invalidJsonFields, setInvalidJsonFields] = useState<Record<string, boolean>>({});
+  const [customSelections, setCustomSelections] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setDrafts({});
+    setInvalidJsonFields({});
+  }, [value]);
+
+  const entries = Object.entries(value);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold">{title}</h4>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {entries.map(([key, currentValue]) => {
+          if (typeof currentValue === 'boolean') {
+            return (
+              <label key={key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={currentValue}
+                  onChange={(event) => onChange({ ...value, [key]: event.target.checked })}
+                />
+                {formatFieldLabel(key)}
+              </label>
+            );
+          }
+
+          const isStructured = currentValue !== null && typeof currentValue === 'object';
+          const options = dropdownOptions[key];
+          const allowsOther = allowOtherFor.includes(key);
+          const currentTextValue = String(currentValue ?? '');
+          const isCustomSelection =
+            allowsOther &&
+            (customSelections[key] === true || Boolean(currentTextValue && !options?.includes(currentTextValue)));
+          const currentDraft =
+            drafts[key] ??
+            (isStructured ? JSON.stringify(currentValue, null, 2) : String(currentValue ?? ''));
+          const saveDraft = () => {
+            let nextValue: unknown = currentDraft;
+            if (isStructured) {
+              try {
+                nextValue = JSON.parse(currentDraft);
+                setInvalidJsonFields((previous) => ({ ...previous, [key]: false }));
+              } catch {
+                setInvalidJsonFields((previous) => ({ ...previous, [key]: true }));
+                toast.error(`${formatFieldLabel(key)} must contain valid JSON`);
+                return;
+              }
+            } else if (typeof currentValue === 'number' && currentDraft.trim()) {
+              const parsed = Number(currentDraft);
+              if (!Number.isFinite(parsed)) return;
+              nextValue = parsed;
+            }
+            onChange({ ...value, [key]: nextValue });
+            setDrafts((previous) => {
+              const next = { ...previous };
+              delete next[key];
+              return next;
+            });
+          };
+
+          return (
+            <FormField
+              key={key}
+              label={formatFieldLabel(key)}
+              hint={isStructured ? 'Edit as valid JSON.' : undefined}
+              className={isStructured ? 'sm:col-span-2' : undefined}
+            >
+              {isStructured ? (
+                <Textarea
+                  rows={4}
+                  value={currentDraft}
+                  aria-invalid={Boolean(invalidJsonFields[key])}
+                  onChange={(event) => setDrafts((previous) => ({ ...previous, [key]: event.target.value }))}
+                  onBlur={saveDraft}
+                />
+              ) : options ? (
+                <div className="space-y-2">
+                  <Select
+                    value={isCustomSelection ? '__other__' : currentTextValue || undefined}
+                    onValueChange={(selectedValue) => {
+                      if (selectedValue === '__other__') {
+                        setCustomSelections((previous) => ({ ...previous, [key]: true }));
+                        if (!isCustomSelection) onChange({ ...value, [key]: '' });
+                        return;
+                      }
+                      setCustomSelections((previous) => ({ ...previous, [key]: false }));
+                      onChange({ ...value, [key]: selectedValue });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={`Select ${formatFieldLabel(key).toLowerCase()}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                      {allowsOther ? <SelectItem value="__other__">Other</SelectItem> : null}
+                      {!allowsOther && currentTextValue && !options.includes(currentTextValue) ? (
+                        <SelectItem value={currentTextValue}>{currentTextValue}</SelectItem>
+                      ) : null}
+                    </SelectContent>
+                  </Select>
+                  {allowsOther && isCustomSelection ? (
+                    <Input
+                      aria-label={`${formatFieldLabel(key)} custom value`}
+                      value={currentTextValue}
+                      onChange={(event) => onChange({ ...value, [key]: event.target.value })}
+                      placeholder={`Enter ${formatFieldLabel(key).toLowerCase()}`}
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <Input
+                  value={currentDraft}
+                  onChange={(event) => setDrafts((previous) => ({ ...previous, [key]: event.target.value }))}
+                  onBlur={saveDraft}
+                />
+              )}
+              {invalidJsonFields[key] ? (
+                <p className="mt-1 text-xs text-destructive">Enter valid JSON before continuing.</p>
+              ) : null}
+            </FormField>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CustomAttributesEditor({
+  value,
+  onChange,
+}: {
+  value: Array<{ label: string; value: string }>;
+  onChange: (value: Array<{ label: string; value: string }>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold">Seller Custom Attributes</h4>
+        <button
+          type="button"
+          className="text-xs font-semibold text-primary hover:underline"
+          onClick={() => onChange([...value, { label: '', value: '' }])}
+        >
+          Add attribute
+        </button>
+      </div>
+      {value.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No seller-defined attributes were submitted.</p>
+      ) : (
+        <div className="space-y-3">
+          {value.map((attribute, index) => (
+            <div key={index} className="grid gap-3 sm:grid-cols-[1fr_2fr_auto]">
+              <Input
+                aria-label={`Attribute ${index + 1} name`}
+                placeholder="Attribute name"
+                value={attribute.label}
+                onChange={(event) =>
+                  onChange(value.map((item, row) => row === index ? { ...item, label: event.target.value } : item))
+                }
+              />
+              <Input
+                aria-label={`Attribute ${index + 1} value`}
+                placeholder="Attribute value"
+                value={attribute.value}
+                onChange={(event) =>
+                  onChange(value.map((item, row) => row === index ? { ...item, value: event.target.value } : item))
+                }
+              />
+              <button
+                type="button"
+                className="text-xs text-destructive hover:underline"
+                onClick={() => onChange(value.filter((_, row) => row !== index))}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SubmissionReviewForm({
   submission,
   onSubmit,
@@ -138,30 +504,75 @@ export function SubmissionReviewForm({
   const [masterSearch, setMasterSearch] = useState('');
 
   const sellerSubmittedCategory =
+    getCleanText(submission.customCategoryName) ||
     getCleanText(submission.medicalCategory) ||
     getCleanText(submission.category) ||
     getCleanText(refName(submission.categoryId));
 
   const sellerSubmittedSubcategory =
+    getCleanText(submission.customSubcategoryName) ||
     getCleanText(submission.medicalSubcategory) ||
     getCleanText(submission.subcategory) ||
     getCleanText(refName(submission.subcategoryId));
 
   const sellerSubmittedProductType =
+    getCleanText(submission.customProductTypeName) ||
     getCleanText(submission.productType) ||
     getCleanText(submission.dosageForm) ||
     getCleanText(refName(submission.productTypeId));
 
-  const [categoryId, setCategoryId] = useState<string>(refId(submission.categoryId));
-  const [subcategoryId, setSubcategoryId] = useState<string>(refId(submission.subcategoryId));
-  const [productTypeId, setProductTypeId] = useState<string>(refId(submission.productTypeId));
+  const otherProductDetailsItems: Array<[string, unknown]> = [];
+  if (submission.sku) otherProductDetailsItems.push(['SKU / Product Code', submission.sku]);
+  if (submission.countryOfOrigin) otherProductDetailsItems.push(['Country of Origin', submission.countryOfOrigin]);
+  const otherManufacturerDetails = (submission.manufacturerDetails || {}) as Record<string, unknown>;
+  for (const [key, label] of [
+    ['manufacturerContactNumber', 'Manufacturer Contact Number'],
+    ['manufacturerEmail', 'Manufacturer Email'],
+    ['importerDetails', 'Importer Details'],
+    ['packerDetails', 'Packer Details'],
+    ['certificationDetails', 'Certification Details'],
+    ['certificationNumber', 'Certification Number'],
+  ] as const) {
+    const value = getCleanText(otherManufacturerDetails[key]);
+    if (value) otherProductDetailsItems.push([label, value]);
+  }
+  if (submission.minOrderQuantity != null) {
+    otherProductDetailsItems.push(['Minimum Order Quantity', submission.minOrderQuantity]);
+  }
+  if (submission.maxOrderQuantity != null) {
+    otherProductDetailsItems.push(['Maximum Order Quantity', submission.maxOrderQuantity]);
+  }
+  if (submission.lowStockThreshold != null) {
+    otherProductDetailsItems.push(['Low Stock Threshold', submission.lowStockThreshold]);
+  }
+
+  const customClassificationItems: Array<[string, unknown]> = [];
+  if (getCleanText(submission.customCategoryName)) {
+    customClassificationItems.push(['Seller-entered Category (Other)', getCleanText(submission.customCategoryName)]);
+  }
+  if (getCleanText(submission.customSubcategoryName)) {
+    customClassificationItems.push(['Seller-entered Subcategory (Other)', getCleanText(submission.customSubcategoryName)]);
+  }
+  if (getCleanText(submission.customProductTypeName)) {
+    customClassificationItems.push(['Seller-entered Product Type (Other)', getCleanText(submission.customProductTypeName)]);
+  }
+
+  const [categoryId, setCategoryId] = useState<string>(
+    submission.isOtherProduct ? '' : refId(submission.categoryId),
+  );
+  const [subcategoryId, setSubcategoryId] = useState<string>(
+    submission.isOtherProduct ? '' : refId(submission.subcategoryId),
+  );
+  const [productTypeId, setProductTypeId] = useState<string>(
+    submission.isOtherProduct ? '' : refId(submission.productTypeId),
+  );
   const [userChangedCategory, setUserChangedCategory] = useState(false);
 
   const [form, setForm] = useState({
     name: String(submission.submittedProductName || ''),
     brand: String(submission.brand || ''),
     description: String(submission.description || ''),
-    sku: '',
+    sku: String(submission.sku || ''),
     gtin: '',
     complianceInfo: '',
     sellingPrice: submission.sellingPricePaise != null ? String(Number(submission.sellingPricePaise) / 100) : '',
@@ -173,6 +584,23 @@ export function SubmissionReviewForm({
   const [productInformation, setProductInformation] = useState<ProductInformationFormState>(
     EMPTY_PRODUCT_INFORMATION,
   );
+  const [seasonalForm, setSeasonalForm] = useState({
+    festival: String(submission.festival || ''),
+    seasonalSubcategory: String(submission.seasonalSubcategory || ''),
+    specifications: getStructuredRecord(submission.specifications),
+    manufacturerDetails: getStructuredRecord(submission.manufacturerDetails),
+    complianceDetails: getStructuredRecord(submission.complianceDetails),
+    availableFrom: getDateInputValue(submission.availableFrom),
+    availableUntil: getDateInputValue(submission.availableUntil),
+    certificationDocUrl: String(submission.certificationDocUrl || ''),
+    customAttributes: getCustomAttributeRows(submission.customAttributes),
+  });
+  const [customSeasonalSubcategory, setCustomSeasonalSubcategory] = useState(false);
+  const [otherProductForm, setOtherProductForm] = useState({
+    countryOfOrigin: String(submission.countryOfOrigin || ''),
+    manufacturerDetails: getStructuredRecord(submission.manufacturerDetails),
+    customAttributes: getCustomAttributeRows(submission.customAttributes),
+  });
   const [images, setImages] = useState<ProductImageDraft[]>([]);
   const [createSellerListing, setCreateSellerListing] = useState(true);
   const [addToMasterCatalogue, setAddToMasterCatalogue] = useState(false);
@@ -227,7 +655,7 @@ export function SubmissionReviewForm({
   const { data: categories = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories-active'],
     queryFn: async () =>
-      (await api<{ items: Array<{ _id: string; name: string; vertical?: string; code?: string }> }>(
+      (await api<{ items: Array<{ _id: string; name: string; vertical?: string; code?: string; festival?: string }> }>(
         `${endpoints.categories}?status=ACTIVE&limit=100`
       )).data?.items || [],
     enabled: !readOnly,
@@ -293,15 +721,80 @@ export function SubmissionReviewForm({
     submission.medicalSubcategory
   );
 
-  const [selectedVertical, setSelectedVertical] = useState<'KIRANA' | 'MEDICAL' | 'ALL'>('ALL');
+  const isSeasonal = Boolean(
+    submission.isSeasonalProduct ||
+    submission.festival ||
+    submission.seasonalSubcategory ||
+    submission.productType === 'SEASONAL'
+  );
+
+  const seasonalDetailsList = useMemo(() => {
+    if (!isSeasonal) return [];
+    const items: Array<[string, unknown]> = [];
+    if (submission.festival) items.push(['Festival / Occasion', `🪔 ${submission.festival}`]);
+    if (submission.seasonalSubcategory) items.push(['Seasonal Subcategory', submission.seasonalSubcategory]);
+    if (submission.availableFrom) items.push(['Available From', new Date(String(submission.availableFrom)).toLocaleDateString()]);
+    if (submission.availableUntil) items.push(['Available Until', new Date(String(submission.availableUntil)).toLocaleDateString()]);
+    if (submission.minOrderQuantity) items.push(['Min Order Qty', submission.minOrderQuantity]);
+    if (submission.maxOrderQuantity) items.push(['Max Order Qty', submission.maxOrderQuantity]);
+
+    const specs = (submission.specifications || {}) as Record<string, any>;
+    for (const [key, val] of Object.entries(specs)) {
+      if (val != null && val !== '') {
+        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        if (Array.isArray(val)) {
+          items.push([label, val.map((v) => (typeof v === 'object' ? `${v.name || ''} (${v.quantity || ''})` : String(v))).join(', ')]);
+        } else if (typeof val === 'boolean') {
+          items.push([label, val ? 'Yes' : 'No']);
+        } else if (typeof val !== 'object') {
+          items.push([label, String(val)]);
+        } else {
+          items.push([label, JSON.stringify(val)]);
+        }
+      }
+    }
+
+    const mfg = (submission.manufacturerDetails || {}) as Record<string, any>;
+    for (const [key, value] of Object.entries(mfg)) {
+      if (value != null && value !== '') {
+        items.push([
+          formatFieldLabel(key),
+          typeof value === 'object' ? JSON.stringify(value) : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value),
+        ]);
+      }
+    }
+
+    const comp = (submission.complianceDetails || {}) as Record<string, any>;
+    for (const [key, value] of Object.entries(comp)) {
+      if (value != null && value !== '') {
+        items.push([
+          formatFieldLabel(key),
+          typeof value === 'object' ? JSON.stringify(value) : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value),
+        ]);
+      }
+    }
+    if (Array.isArray(submission.customAttributes)) {
+      for (const attribute of submission.customAttributes as Array<{ label: string; value: string }>) {
+        if (attribute?.label && attribute.value) items.push([attribute.label, attribute.value]);
+      }
+    }
+
+    return items;
+  }, [isSeasonal, submission]);
+
+  const [selectedVertical, setSelectedVertical] = useState<'KIRANA' | 'MEDICAL' | 'SEASONAL' | 'ALL'>('ALL');
 
   useEffect(() => {
-    if (isMedical) {
+    if (submission.isOtherProduct) {
+      setSelectedVertical('ALL');
+    } else if (isMedical) {
       setSelectedVertical('MEDICAL');
+    } else if (isSeasonal) {
+      setSelectedVertical('SEASONAL');
     } else {
       setSelectedVertical('KIRANA');
     }
-  }, [isMedical]);
+  }, [isMedical, isSeasonal, submission.isOtherProduct]);
 
   const medicalCategories = useMemo(() => {
     return categories
@@ -309,22 +802,68 @@ export function SubmissionReviewForm({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [categories]);
 
+  const seasonalCategories = useMemo(() => {
+    return categories
+      .filter((c) => c.vertical === 'SEASONAL' || c.code === 'FEST')
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories]);
+
   const kiranaCategories = useMemo(() => {
     return categories
-      .filter((c) => c.vertical !== 'MEDICAL' && c.code !== 'MED' && (!c.name || !c.name.toLowerCase().includes('prescription')))
+      .filter((c) =>
+        c.vertical !== 'MEDICAL' &&
+        c.code !== 'MED' &&
+        c.vertical !== 'SEASONAL' &&
+        c.code !== 'FEST' &&
+        (!c.name || !c.name.toLowerCase().includes('prescription')),
+      )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [categories]);
 
   const displayedCategories = useMemo(() => {
     if (selectedVertical === 'MEDICAL') return medicalCategories;
+    if (selectedVertical === 'SEASONAL') return seasonalCategories;
     if (selectedVertical === 'KIRANA') return kiranaCategories;
-    return [...medicalCategories, ...kiranaCategories];
-  }, [selectedVertical, medicalCategories, kiranaCategories]);
+    return [...medicalCategories, ...seasonalCategories, ...kiranaCategories];
+  }, [selectedVertical, medicalCategories, seasonalCategories, kiranaCategories]);
 
   const sortedSubcategories = useMemo(() => {
     if (!subcategories) return [];
     return [...subcategories].sort((a, b) => a.name.localeCompare(b.name));
   }, [subcategories]);
+
+  const seasonalFestivalOptions = useMemo(
+    () => includeCurrentOption(seasonalCategories.map((category) => category.festival || ''), seasonalForm.festival),
+    [seasonalCategories, seasonalForm.festival],
+  );
+
+  const seasonalSubcategoryOptions = useMemo(
+    () => sortedSubcategories.map((subcategory) => subcategory.name),
+    [sortedSubcategories],
+  );
+  const isCustomSeasonalSubcategory =
+    customSeasonalSubcategory ||
+    Boolean(seasonalForm.seasonalSubcategory && !seasonalSubcategoryOptions.includes(seasonalForm.seasonalSubcategory));
+
+  const seasonalSpecificationOptions = useMemo(() => {
+    const options = { ...SEASONAL_SPECIFICATION_OPTIONS };
+    const productTypeOptions = Array.from(new Set((productTypes || []).map((productType) => productType.name)));
+    for (const key of SEASONAL_PRODUCT_TYPE_SPECIFICATION_KEYS) {
+      options[key] = productTypeOptions;
+    }
+    if (seasonalForm.seasonalSubcategory === 'Pooja Products and Idols') {
+      options.material = [
+        'Clay / Mitti (Eco-friendly)',
+        'Brass',
+        'Marble Dust / Polyresin',
+        'Silver Plated',
+        'Copper',
+        'Stainless Steel',
+        'Wood / Terracotta',
+      ];
+    }
+    return options;
+  }, [productTypes, seasonalForm.seasonalSubcategory]);
 
   const sortedProductTypes = useMemo(() => {
     if (!productTypes) return [];
@@ -334,12 +873,15 @@ export function SubmissionReviewForm({
   useEffect(() => {
     if (!categoryId || !categories.length) return;
     const isCatMedical = medicalCategories.some((c) => c._id === categoryId);
-    if (isCatMedical && selectedVertical === 'KIRANA') {
+    const isCatSeasonal = seasonalCategories.some((c) => c._id === categoryId);
+    if (isCatMedical && selectedVertical !== 'MEDICAL') {
       setSelectedVertical('MEDICAL');
-    } else if (!isCatMedical && selectedVertical === 'MEDICAL') {
+    } else if (isCatSeasonal && selectedVertical !== 'SEASONAL') {
+      setSelectedVertical('SEASONAL');
+    } else if (!isCatMedical && !isCatSeasonal && selectedVertical !== 'KIRANA') {
       setSelectedVertical('KIRANA');
     }
-  }, [categoryId, categories, medicalCategories, selectedVertical]);
+  }, [categoryId, categories, medicalCategories, seasonalCategories, selectedVertical]);
 
   const medicalDetailsList: Array<[string, string]> = useMemo(() => {
     if (!isMedical) return [];
@@ -431,6 +973,7 @@ export function SubmissionReviewForm({
       name: String(submission.submittedProductName || prev.name || ''),
       brand: String(submission.brand || prev.brand || ''),
       description: String(submission.description || prev.description || ''),
+      sku: String(submission.sku || ''),
       sellingPrice:
         submission.sellingPricePaise != null
           ? String(Number(submission.sellingPricePaise) / 100)
@@ -482,10 +1025,33 @@ export function SubmissionReviewForm({
       prescriptionRequired: Boolean(submission.prescriptionRequired),
       additionalNotes: String(submission.additionalNotes || ''),
     });
+    setSeasonalForm({
+      festival: String(submission.festival || ''),
+      seasonalSubcategory: String(submission.seasonalSubcategory || ''),
+      specifications: getStructuredRecord(submission.specifications),
+      manufacturerDetails: getStructuredRecord(submission.manufacturerDetails),
+      complianceDetails: getStructuredRecord(submission.complianceDetails),
+      availableFrom: getDateInputValue(submission.availableFrom),
+      availableUntil: getDateInputValue(submission.availableUntil),
+      certificationDocUrl: String(submission.certificationDocUrl || ''),
+      customAttributes: getCustomAttributeRows(submission.customAttributes),
+    });
+    setCustomSeasonalSubcategory(false);
+    setOtherProductForm({
+      countryOfOrigin: String(submission.countryOfOrigin || ''),
+      manufacturerDetails: getStructuredRecord(submission.manufacturerDetails),
+      customAttributes: getCustomAttributeRows(submission.customAttributes),
+    });
 
-    if (submission.categoryId) setCategoryId(refId(submission.categoryId));
-    if (submission.subcategoryId) setSubcategoryId(refId(submission.subcategoryId));
-    if (submission.productTypeId) setProductTypeId(refId(submission.productTypeId));
+    if (submission.isOtherProduct) {
+      setCategoryId('');
+      setSubcategoryId('');
+      setProductTypeId('');
+    } else {
+      if (submission.categoryId) setCategoryId(refId(submission.categoryId));
+      if (submission.subcategoryId) setSubcategoryId(refId(submission.subcategoryId));
+      if (submission.productTypeId) setProductTypeId(refId(submission.productTypeId));
+    }
 
     if (Array.isArray(submission.requestedAttributes) && submission.requestedAttributes.length > 0) {
       setAttributes((prev) => {
@@ -499,7 +1065,7 @@ export function SubmissionReviewForm({
               ? String(attr.attributeId._id)
               : String(attr.attributeId || '');
           if (attrId && attr.value !== undefined && attr.value !== null) {
-            next[attrId] = String(attr.value);
+            next[attrId] = Array.isArray(attr.value) ? JSON.stringify(attr.value) : String(attr.value);
           }
         });
         return next;
@@ -512,7 +1078,9 @@ export function SubmissionReviewForm({
     if (!categories || categories.length === 0 || userChangedCategory) return;
 
     // Check if seller requested a specific category (e.g. "Prescription Medicines")
-    const requestedCat = (sellerSubmittedCategory || '').trim().toLowerCase();
+    const requestedCat = submission.isOtherProduct
+      ? ''
+      : (sellerSubmittedCategory || '').trim().toLowerCase();
     if (requestedCat) {
       const directMatch = categories.find((c) => c.name.toLowerCase().trim() === requestedCat);
       if (directMatch) {
@@ -537,7 +1105,7 @@ export function SubmissionReviewForm({
       return;
     }
 
-    const refCatId = refId(submission.categoryId);
+    const refCatId = submission.isOtherProduct ? '' : refId(submission.categoryId);
     if (refCatId && categories.some((c) => c._id === refCatId)) {
       setCategoryId(refCatId);
       return;
@@ -552,10 +1120,10 @@ export function SubmissionReviewForm({
       }
     }
 
-    if (categories[0]?._id && !categoryId) {
+    if (!submission.isOtherProduct && categories[0]?._id && !categoryId) {
       setCategoryId(categories[0]._id);
     }
-  }, [categories, categoryId, sellerSubmittedCategory, userChangedCategory, submission.categoryId, isMedical]);
+  }, [categories, categoryId, sellerSubmittedCategory, userChangedCategory, submission.categoryId, submission.isOtherProduct, isMedical]);
 
   // Auto-match subcategory when subcategories query finishes if not already selected
   useEffect(() => {
@@ -565,7 +1133,9 @@ export function SubmissionReviewForm({
       return;
     }
 
-    const rawSubcat = (sellerSubmittedSubcategory || '').trim().toLowerCase();
+    const rawSubcat = submission.isOtherProduct
+      ? ''
+      : (sellerSubmittedSubcategory || '').trim().toLowerCase();
     if (rawSubcat) {
       const directMatch = subcategories.find((s) => s.name.toLowerCase().trim() === rawSubcat);
       if (directMatch) {
@@ -581,16 +1151,16 @@ export function SubmissionReviewForm({
       }
     }
 
-    const refSubcatId = refId(submission.subcategoryId);
+    const refSubcatId = submission.isOtherProduct ? '' : refId(submission.subcategoryId);
     if (refSubcatId && subcategories.some((s) => s._id === refSubcatId)) {
       setSubcategoryId(refSubcatId);
       return;
     }
 
-    if (subcategories[0]?._id) {
+    if (!submission.isOtherProduct && subcategories[0]?._id) {
       setSubcategoryId(subcategories[0]._id);
     }
-  }, [subcategories, subcategoryId, sellerSubmittedSubcategory, submission.subcategoryId]);
+  }, [subcategories, subcategoryId, sellerSubmittedSubcategory, submission.subcategoryId, submission.isOtherProduct]);
 
   // Auto-match product type when productTypes query finishes if not already selected
   useEffect(() => {
@@ -600,7 +1170,9 @@ export function SubmissionReviewForm({
       return;
     }
 
-    const rawPt = (sellerSubmittedProductType || '').trim().toLowerCase();
+    const rawPt = submission.isOtherProduct
+      ? ''
+      : (sellerSubmittedProductType || '').trim().toLowerCase();
 
     // 1. Try matching productType (e.g. "Medicine", "OTC medicine", "Medical device")
     if (rawPt) {
@@ -622,16 +1194,16 @@ export function SubmissionReviewForm({
       }
     }
 
-    const refPtId = refId(submission.productTypeId);
+    const refPtId = submission.isOtherProduct ? '' : refId(submission.productTypeId);
     if (refPtId && productTypes.some((pt) => pt._id === refPtId)) {
       setProductTypeId(refPtId);
       return;
     }
 
-    if (productTypes[0]?._id) {
+    if (!submission.isOtherProduct && productTypes[0]?._id) {
       setProductTypeId(productTypes[0]._id);
     }
-  }, [productTypes, productTypeId, sellerSubmittedProductType, submission.productTypeId, submission.dosageForm]);
+  }, [productTypes, productTypeId, sellerSubmittedProductType, submission.productTypeId, submission.dosageForm, submission.isOtherProduct]);
 
   const missingRequiredAttrs = useMemo(() => {
     if (approvalMode !== 'create' || !productTypeId) return [];
@@ -667,6 +1239,30 @@ export function SubmissionReviewForm({
     const sellingPricePaise = parsePriceToPaise(form.sellingPrice);
     const qtyNum = form.quantity.trim() ? Number(form.quantity.trim()) : undefined;
     const lvNum = form.lifespanValue.trim() ? Number(form.lifespanValue.trim()) : undefined;
+    const seasonalDetails = isSeasonal
+      ? {
+          festival: seasonalForm.festival.trim(),
+          seasonalSubcategory: seasonalForm.seasonalSubcategory.trim(),
+          specifications: seasonalForm.specifications,
+          manufacturerDetails: seasonalForm.manufacturerDetails,
+          complianceDetails: seasonalForm.complianceDetails,
+          availableFrom: seasonalForm.availableFrom || undefined,
+          availableUntil: seasonalForm.availableUntil || undefined,
+          certificationDocUrl: seasonalForm.certificationDocUrl.trim() || undefined,
+          customAttributes: seasonalForm.customAttributes.filter(
+            (attribute) => attribute.label.trim() && attribute.value.trim(),
+          ),
+        }
+      : undefined;
+    const otherProductDetails = submission.isOtherProduct
+      ? {
+          countryOfOrigin: otherProductForm.countryOfOrigin.trim(),
+          manufacturerDetails: otherProductForm.manufacturerDetails,
+          customAttributes: otherProductForm.customAttributes.filter(
+            (attribute) => attribute.label.trim() && attribute.value.trim(),
+          ),
+        }
+      : undefined;
 
     if (action === 'APPROVE' && approvalMode === 'map') {
       return {
@@ -675,6 +1271,8 @@ export function SubmissionReviewForm({
         masterProductId,
         sellingPricePaise,
         quantity: qtyNum != null && !Number.isNaN(qtyNum) ? qtyNum : undefined,
+        seasonalDetails,
+        otherProductDetails,
         createSellerListing,
         addToMasterCatalogue: true,
       };
@@ -733,6 +1331,8 @@ export function SubmissionReviewForm({
       quantity: qtyNum != null && !Number.isNaN(qtyNum) ? qtyNum : undefined,
       lifespanValue: lvNum != null && !Number.isNaN(lvNum) ? lvNum : undefined,
       lifespanUnit: form.lifespanUnit || (lvNum ? 'Days' : undefined),
+      seasonalDetails,
+      otherProductDetails,
       createSellerListing,
       addToMasterCatalogue,
     };
@@ -753,6 +1353,23 @@ export function SubmissionReviewForm({
     }
     if (approvalMode === 'map' && !canApproveMap) {
       toast.error('Select an existing master product to map this request to');
+      return;
+    }
+    const attributesToReview = isSeasonal
+      ? seasonalForm.customAttributes
+      : submission.isOtherProduct
+        ? otherProductForm.customAttributes
+        : [];
+    const filledAttributes = attributesToReview.filter(
+      (attribute) => attribute.label.trim() || attribute.value.trim(),
+    );
+    if (filledAttributes.some((attribute) => !attribute.label.trim() || !attribute.value.trim())) {
+      toast.error('Complete or remove each custom attribute before approving');
+      return;
+    }
+    const normalizedLabels = filledAttributes.map((attribute) => attribute.label.trim().toLowerCase());
+    if (new Set(normalizedLabels).size !== normalizedLabels.length) {
+      toast.error('Custom attribute names must be unique');
       return;
     }
     onSubmit(buildPayload('APPROVE'));
@@ -782,7 +1399,14 @@ export function SubmissionReviewForm({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
-                Request Type: {isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'}
+                Request Type: {isSeasonal
+                  ? 'Seasonal Product'
+                  : submission.isOtherProduct
+                    ? 'Other Product'
+                    : isMedical
+                      ? 'Medical Product'
+                      : 'Kirana Product'}
+                {' · '}{isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'}
               </p>
               <h2 className="mt-0.5 text-base font-bold">
                 This product was requested by <span className="text-blue-900 underline underline-offset-2">{storeName}</span>
@@ -803,11 +1427,14 @@ export function SubmissionReviewForm({
             title="Seller Submission"
             items={[
               ['Requested By Store', storeName],
+              ['Product Flow', isSeasonal ? 'Seasonal' : submission.isOtherProduct ? 'Other' : isMedical ? 'Medical' : 'Kirana'],
               ['Request Type', isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'],
               ['Product Name', submission.submittedProductName],
               ['Category', sellerSubmittedCategory || '—'],
               ['Subcategory', sellerSubmittedSubcategory || '—'],
               ['Product Type', sellerSubmittedProductType || '—'],
+              ...customClassificationItems,
+              ...otherProductDetailsItems,
               ['Brand', submission.brand],
               ['Manufacturer Company', submission.manufacturerName],
               ['Manufacturer Address', submission.manufacturerAddress],
@@ -835,6 +1462,27 @@ export function SubmissionReviewForm({
             ]}
           />
         </div>
+        {seasonalDetailsList.length > 0 ? (
+          <div className="space-y-4">
+            <InfoCard
+              title="Seasonal Product Specifications & Compliance"
+              items={seasonalDetailsList}
+            />
+            {submission.certificationDocUrl ? (
+              <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs">
+                <span className="font-semibold text-amber-900">Certification Document</span>
+                <a
+                  href={String(submission.certificationDocUrl)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-amber-800 hover:underline inline-flex items-center gap-1"
+                >
+                  View Attached Document
+                </a>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {medicalDetailsList.length > 0 ? (
           <div className="space-y-3">
             <InfoCard
@@ -910,7 +1558,14 @@ export function SubmissionReviewForm({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
-              Request Type: {isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'}
+              Request Type: {isSeasonal
+                ? 'Seasonal Product'
+                : submission.isOtherProduct
+                  ? 'Other Product'
+                  : isMedical
+                    ? 'Medical Product'
+                    : 'Kirana Product'}
+              {' · '}{isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'}
             </p>
             <h2 className="mt-0.5 text-base font-bold">
               This product was requested by <span className="text-blue-900 underline underline-offset-2">{storeName}</span>
@@ -931,12 +1586,15 @@ export function SubmissionReviewForm({
           title="What the seller submitted"
           items={[
             ['Requested By Store', storeName],
+            ['Product Flow', isSeasonal ? 'Seasonal' : submission.isOtherProduct ? 'Other' : isMedical ? 'Medical' : 'Kirana'],
             ['Request Type', isMasterCatalogueMapped ? 'Master Catalogue Product' : 'Store-Specific Custom Product'],
             ['Seller Account', seller?.fullName || storeName],
             ['Product Name', submission.submittedProductName],
             ['Category', sellerSubmittedCategory || '—'],
             ['Subcategory', sellerSubmittedSubcategory || '—'],
             ['Product Type', sellerSubmittedProductType || '—'],
+            ...customClassificationItems,
+            ...otherProductDetailsItems,
             ['Brand', submission.brand || '—'],
             ['Manufacturer Company', submission.manufacturerName || '—'],
             ['Manufacturer Address', submission.manufacturerAddress || '—'],
@@ -984,6 +1642,12 @@ export function SubmissionReviewForm({
           <InfoCard
             title="Submitted Specifications (Net, Units & Details)"
             items={requestedAttributesList}
+          />
+        ) : null}
+        {Array.isArray(submission.customAttributes) && submission.customAttributes.length > 0 ? (
+          <InfoCard
+            title="Seller Custom Product Attributes"
+            items={(submission.customAttributes as Array<{ label: string; value: string }>).map((a) => [a.label, a.value])}
           />
         ) : null}
       </div>
@@ -1099,7 +1763,7 @@ export function SubmissionReviewForm({
           {/* ── STEP 1: CATALOGUE PLACEMENT — always first for both medical & kirana ── */}
           <FormSection
             title="1. Catalogue Placement"
-            description="Assign the correct category, subcategory and product type. Use the vertical filter to show medical or kirana categories."
+            description="Assign the correct category, subcategory, and product type. Seasonal requests stay in the Seasonal catalogue; Other requests need an explicit catalogue placement."
           >
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-700">
               <span className="font-semibold text-slate-900">Seller Submitted:</span>
@@ -1117,11 +1781,26 @@ export function SubmissionReviewForm({
                   Dosage Form: {String(submission.dosageForm)}
                 </span>
               ) : null}
+              {isSeasonal ? (
+                <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
+                  Seasonal · {String(submission.festival || 'Festival')}
+                </span>
+              ) : null}
+              {submission.isOtherProduct ? (
+                <span className="rounded bg-violet-100 px-2 py-0.5 font-medium text-violet-900">
+                  Other Product
+                </span>
+              ) : null}
             </div>
 
             <div className="mb-4 flex items-center gap-3">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Catalogue Vertical:</span>
-              <div className="inline-flex rounded-lg border border-input p-0.5 bg-muted/30">
+              {isSeasonal ? (
+                <span className="rounded-md bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-900">
+                  🪔 Seasonal Catalogue ({seasonalCategories.length})
+                </span>
+              ) : (
+                <div className="inline-flex flex-wrap rounded-lg border border-input p-0.5 bg-muted/30">
                 <button
                   type="button"
                   onClick={() => setSelectedVertical('MEDICAL')}
@@ -1144,6 +1823,16 @@ export function SubmissionReviewForm({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setSelectedVertical('SEASONAL')}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all",
+                    selectedVertical === 'SEASONAL' ? "bg-orange-100 text-orange-900 shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  🪔 Seasonal ({seasonalCategories.length})
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSelectedVertical('ALL')}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all",
@@ -1152,7 +1841,8 @@ export function SubmissionReviewForm({
                 >
                   🌐 All Categories ({categories.length})
                 </button>
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="grid gap-5 sm:grid-cols-3">
@@ -1192,6 +1882,21 @@ export function SubmissionReviewForm({
                               </SelectItem>
                             ))}
                           </SelectGroup>
+                        )}
+                        {seasonalCategories.length > 0 && (
+                          <>
+                            <SelectSeparator />
+                            <SelectGroup>
+                              <SelectLabel className="text-xs font-bold text-orange-800 uppercase tracking-wider">
+                                🪔 Seasonal Categories ({seasonalCategories.length})
+                              </SelectLabel>
+                              {seasonalCategories.map((c) => (
+                                <SelectItem key={c._id} value={c._id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </>
                         )}
                         {kiranaCategories.length > 0 && (
                           <>
@@ -1305,21 +2010,54 @@ export function SubmissionReviewForm({
               title="💊 2. Medical & Pharmaceutical Details"
               description="Review and correct all medical-specific fields before approving. These are editable by the admin."
             >
-                {/* Seller-reported medical category/subcategory/type as read-only context — not editable here, use Catalogue Placement above */}
-                {(medForm.medicalCategory || medForm.medicalSubcategory || medForm.productType) ? (
-                  <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-900">
-                    <span className="font-semibold">Seller reported:</span>
-                    {medForm.medicalCategory ? (
-                      <span className="rounded bg-blue-100 px-2 py-0.5 font-medium">{medForm.medicalCategory}</span>
-                    ) : null}
-                    {medForm.medicalSubcategory ? (
-                      <span className="rounded bg-indigo-100 px-2 py-0.5 font-medium text-indigo-800">{medForm.medicalSubcategory}</span>
-                    ) : null}
-                    {medForm.productType ? (
-                      <span className="rounded bg-purple-100 px-2 py-0.5 font-medium text-purple-800">{medForm.productType}</span>
-                    ) : null}
-                  </div>
-                ) : null}
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <FormField label="Medical Category" hint="Seller's medical taxonomy category.">
+                    <ReviewSelect
+                      value={medForm.medicalCategory}
+                      options={medicalCategories.map((category) => category.name)}
+                      placeholder={categoriesLoading ? 'Loading medical categories...' : 'Select medical category'}
+                      onChange={(medicalCategory) => {
+                        const category = medicalCategories.find((item) => item.name === medicalCategory);
+                        setMedForm({ ...medForm, medicalCategory, medicalSubcategory: '', productType: '' });
+                        if (category) {
+                          setUserChangedCategory(true);
+                          setCategoryId(category._id);
+                          setSubcategoryId('');
+                          setProductTypeId('');
+                          setAttributes({});
+                        }
+                      }}
+                    />
+                  </FormField>
+                  <FormField label="Medical Subcategory" hint="Choose a subcategory under the selected catalogue category.">
+                    <ReviewSelect
+                      value={medForm.medicalSubcategory}
+                      options={sortedSubcategories.map((subcategory) => subcategory.name)}
+                      placeholder={!categoryId ? 'Select category first' : subcategoriesLoading ? 'Loading subcategories...' : 'Select medical subcategory'}
+                      onChange={(medicalSubcategory) => {
+                        const subcategory = sortedSubcategories.find((item) => item.name === medicalSubcategory);
+                        setMedForm({ ...medForm, medicalSubcategory, productType: '' });
+                        if (subcategory) {
+                          setSubcategoryId(subcategory._id);
+                          setProductTypeId('');
+                          setAttributes({});
+                        }
+                      }}
+                    />
+                  </FormField>
+                  <FormField label="Medical Product Type" hint="Seller's medical product classification.">
+                    <ReviewSelect
+                      value={medForm.productType}
+                      options={sortedProductTypes.map((productType) => productType.name)}
+                      placeholder={!subcategoryId ? 'Select subcategory first' : productTypesLoading ? 'Loading product types...' : 'Select medical product type'}
+                      onChange={(productType) => {
+                        const selectedType = sortedProductTypes.find((item) => item.name === productType);
+                        setMedForm({ ...medForm, productType });
+                        if (selectedType) setProductTypeId(selectedType._id);
+                      }}
+                    />
+                  </FormField>
+                </div>
                 {/* Rx / OTC toggles */}
                 <div className="mb-5 flex flex-wrap gap-4">
                   <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
@@ -1358,18 +2096,20 @@ export function SubmissionReviewForm({
                   </FormField>
 
                   <FormField label="Dosage Form" required hint="Physical form (e.g. Tablet, Capsule, Syrup, Ointment, Injection).">
-                    <Input
-                      placeholder="e.g. Tablet"
+                    <ReviewSelect
                       value={medForm.dosageForm}
-                      onChange={(e) => setMedForm({ ...medForm, dosageForm: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.dosageForm}
+                      placeholder="Select dosage form"
+                      onChange={(dosageForm) => setMedForm({ ...medForm, dosageForm })}
                     />
                   </FormField>
 
                   <FormField label="Route of Administration" hint="e.g. Oral, Topical, Intravenous, Inhalation.">
-                    <Input
-                      placeholder="e.g. Oral"
+                    <ReviewSelect
                       value={medForm.routeOfAdmin}
-                      onChange={(e) => setMedForm({ ...medForm, routeOfAdmin: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.routeOfAdmin}
+                      placeholder="Select route"
+                      onChange={(routeOfAdmin) => setMedForm({ ...medForm, routeOfAdmin })}
                     />
                   </FormField>
 
@@ -1382,17 +2122,12 @@ export function SubmissionReviewForm({
                       />
                     </FormField>
                     <FormField label="Strength Unit">
-                      <Select
+                      <ReviewSelect
                         value={medForm.strengthUnit}
-                        onValueChange={(v) => setMedForm({ ...medForm, strengthUnit: v })}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Unit" /></SelectTrigger>
-                        <SelectContent>
-                          {['mg', 'g', 'mcg', 'IU', 'mEq', 'mmol', 'ml', '%', 'other'].map((u) => (
-                            <SelectItem key={u} value={u}>{u}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        options={MEDICAL_DROPDOWN_OPTIONS.strengthUnit}
+                        placeholder="Select unit"
+                        onChange={(strengthUnit) => setMedForm({ ...medForm, strengthUnit })}
+                      />
                     </FormField>
                   </div>
 
@@ -1405,10 +2140,11 @@ export function SubmissionReviewForm({
                   </FormField>
 
                   <FormField label="Packaging Type" hint="e.g. Strip, Bottle, Tube, Vial, Sachet.">
-                    <Input
-                      placeholder="e.g. Strip"
+                    <ReviewSelect
                       value={medForm.packagingType}
-                      onChange={(e) => setMedForm({ ...medForm, packagingType: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.packagingType}
+                      placeholder="Select packaging type"
+                      onChange={(packagingType) => setMedForm({ ...medForm, packagingType })}
                     />
                   </FormField>
 
@@ -1421,26 +2157,47 @@ export function SubmissionReviewForm({
                   </FormField>
 
                   <FormField label="Release Type" hint="e.g. Immediate Release, Extended Release, Sustained Release.">
-                    <Input
-                      placeholder="e.g. Immediate Release"
+                    <ReviewSelect
                       value={medForm.releaseType}
-                      onChange={(e) => setMedForm({ ...medForm, releaseType: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.releaseType}
+                      placeholder="Select release type"
+                      onChange={(releaseType) => setMedForm({ ...medForm, releaseType })}
                     />
                   </FormField>
 
                   <FormField label="Product Form" hint="e.g. Film-Coated Tablet, Hard Gelatin Capsule.">
-                    <Input
-                      placeholder="e.g. Film-Coated Tablet"
+                    <ReviewSelect
                       value={medForm.productForm}
-                      onChange={(e) => setMedForm({ ...medForm, productForm: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.productForm}
+                      placeholder="Select product form"
+                      onChange={(productForm) => setMedForm({ ...medForm, productForm })}
                     />
                   </FormField>
 
                   <FormField label="Prescription Category" hint="Schedule H, Schedule H1, Schedule X, OTC, etc.">
-                    <Input
-                      placeholder="e.g. Schedule H"
+                    <ReviewSelect
                       value={medForm.prescriptionCategory}
-                      onChange={(e) => setMedForm({ ...medForm, prescriptionCategory: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.prescriptionCategory}
+                      placeholder="Select prescription category"
+                      onChange={(prescriptionCategory) => {
+                        const requiresPrescription =
+                          prescriptionCategory.includes('Prescription required') ||
+                          prescriptionCategory.includes('Schedule H') ||
+                          prescriptionCategory.includes('Schedule X') ||
+                          prescriptionCategory.includes('restricted');
+                        const doesNotRequirePrescription =
+                          prescriptionCategory.includes('Non-prescription') ||
+                          prescriptionCategory.includes('Not applicable');
+                        setMedForm({
+                          ...medForm,
+                          prescriptionCategory,
+                          ...(requiresPrescription
+                            ? { prescriptionRequired: true }
+                            : doesNotRequirePrescription
+                              ? { prescriptionRequired: false }
+                              : {}),
+                        });
+                      }}
                     />
                   </FormField>
 
@@ -1461,26 +2218,29 @@ export function SubmissionReviewForm({
                   </FormField>
 
                   <FormField label="Country of Origin">
-                    <Input
-                      placeholder="e.g. India"
+                    <ReviewSelect
                       value={medForm.countryOfOrigin}
-                      onChange={(e) => setMedForm({ ...medForm, countryOfOrigin: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.countryOfOrigin}
+                      placeholder="Select country of origin"
+                      onChange={(countryOfOrigin) => setMedForm({ ...medForm, countryOfOrigin })}
                     />
                   </FormField>
 
                   <FormField label="Sterility Status" hint="e.g. Sterile, Non-Sterile.">
-                    <Input
-                      placeholder="e.g. Sterile"
+                    <ReviewSelect
                       value={medForm.sterility}
-                      onChange={(e) => setMedForm({ ...medForm, sterility: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.sterility}
+                      placeholder="Select sterility status"
+                      onChange={(sterility) => setMedForm({ ...medForm, sterility })}
                     />
                   </FormField>
 
                   <FormField label="Use Type" hint="e.g. Single Use, Multi-Use, Disposable.">
-                    <Input
-                      placeholder="e.g. Single Use"
+                    <ReviewSelect
                       value={medForm.useType}
-                      onChange={(e) => setMedForm({ ...medForm, useType: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.useType}
+                      placeholder="Select use type"
+                      onChange={(useType) => setMedForm({ ...medForm, useType })}
                     />
                   </FormField>
 
@@ -1496,10 +2256,11 @@ export function SubmissionReviewForm({
                   </FormField>
 
                   <FormField label="Unit of Sale" hint="e.g. Strip, Tablet, Bottle, Box.">
-                    <Input
-                      placeholder="e.g. Strip"
+                    <ReviewSelect
                       value={medForm.unitOfSale}
-                      onChange={(e) => setMedForm({ ...medForm, unitOfSale: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.unitOfSale}
+                      placeholder="Select unit of sale"
+                      onChange={(unitOfSale) => setMedForm({ ...medForm, unitOfSale })}
                     />
                   </FormField>
 
@@ -1599,11 +2360,11 @@ export function SubmissionReviewForm({
                   </FormField>
 
                   <FormField label="Storage Conditions" className="sm:col-span-2">
-                    <Textarea
-                      rows={2}
-                      placeholder="e.g. Store in a cool, dry place below 25°C. Protect from light."
+                    <ReviewSelect
                       value={medForm.storageCondition}
-                      onChange={(e) => setMedForm({ ...medForm, storageCondition: e.target.value })}
+                      options={MEDICAL_DROPDOWN_OPTIONS.storageCondition}
+                      placeholder="Select storage condition"
+                      onChange={(storageCondition) => setMedForm({ ...medForm, storageCondition })}
                     />
                   </FormField>
 
@@ -1634,6 +2395,187 @@ export function SubmissionReviewForm({
                     />
                   </FormField>
                 </div>
+            </FormSection>
+          ) : null}
+
+          {isSeasonal ? (
+            <FormSection
+              title="🪔 Seasonal Product Details"
+              description="Review the seller's festival-specific specifications, availability, manufacturer, compliance, and custom attributes."
+            >
+              {seasonalDetailsList.length > 0 ? (
+                <InfoCard title="Seller-submitted seasonal data" items={seasonalDetailsList} />
+              ) : (
+                <p className="text-sm text-muted-foreground">No additional seasonal specifications were submitted.</p>
+              )}
+              <div className="grid gap-5 sm:grid-cols-2">
+                <FormField label="Festival / Occasion">
+                  <Select
+                    value={seasonalForm.festival || undefined}
+                    onValueChange={(festival) => setSeasonalForm({ ...seasonalForm, festival })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select festival / occasion" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {seasonalFestivalOptions.map((festival) => (
+                        <SelectItem key={festival} value={festival}>{festival}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField label="Seasonal Subcategory">
+                  <Select
+                    value={isCustomSeasonalSubcategory ? '__other__' : seasonalForm.seasonalSubcategory || undefined}
+                    onValueChange={(seasonalSubcategory) => {
+                      if (seasonalSubcategory === '__other__') {
+                        setCustomSeasonalSubcategory(true);
+                        if (!isCustomSeasonalSubcategory) {
+                          setSeasonalForm({ ...seasonalForm, seasonalSubcategory: '' });
+                        }
+                        return;
+                      }
+                      setCustomSeasonalSubcategory(false);
+                      setSeasonalForm({ ...seasonalForm, seasonalSubcategory });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select seasonal subcategory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {seasonalSubcategoryOptions.map((subcategory) => (
+                        <SelectItem key={subcategory} value={subcategory}>{subcategory}</SelectItem>
+                      ))}
+                      <SelectItem value="__other__">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {isCustomSeasonalSubcategory ? (
+                    <Input
+                      aria-label="Custom seasonal subcategory"
+                      value={seasonalForm.seasonalSubcategory}
+                      onChange={(event) =>
+                        setSeasonalForm({ ...seasonalForm, seasonalSubcategory: event.target.value })
+                      }
+                      placeholder="Enter seasonal subcategory"
+                      className="mt-2"
+                    />
+                  ) : null}
+                </FormField>
+                <FormField label="Available From">
+                  <Input
+                    type="date"
+                    value={seasonalForm.availableFrom}
+                    onChange={(event) => setSeasonalForm({ ...seasonalForm, availableFrom: event.target.value })}
+                  />
+                </FormField>
+                <FormField label="Available Until">
+                  <Input
+                    type="date"
+                    value={seasonalForm.availableUntil}
+                    onChange={(event) => setSeasonalForm({ ...seasonalForm, availableUntil: event.target.value })}
+                  />
+                </FormField>
+                <FormField label="Certification Document URL">
+                  <Input
+                    placeholder="https://..."
+                    value={seasonalForm.certificationDocUrl}
+                    onChange={(event) =>
+                      setSeasonalForm({ ...seasonalForm, certificationDocUrl: event.target.value })
+                    }
+                  />
+                </FormField>
+                <FormField
+                  label="Customer / Consumer Care Contact (Optional)"
+                  hint="Helpline phone number or care email for queries (e.g. care@brand.in or 1800-XXX-XXXX)"
+                >
+                  <Input
+                    placeholder="e.g. care@brand.in or 1800-XXX-XXXX"
+                    value={
+                      String(
+                        seasonalForm.manufacturerDetails?.consumerCareContact ??
+                        seasonalForm.manufacturerDetails?.manufacturerContactNumber ??
+                        (submission as Record<string, any>).manufacturerContactNumber ??
+                        ''
+                      )
+                    }
+                    onChange={(event) => {
+                      const val = event.target.value;
+                      setSeasonalForm((prev) => ({
+                        ...prev,
+                        manufacturerDetails: {
+                          ...prev.manufacturerDetails,
+                          consumerCareContact: val,
+                          manufacturerContactNumber: val,
+                        },
+                      }));
+                    }}
+                  />
+                </FormField>
+              </div>
+              <StructuredRecordEditor
+                key={`${String(submission._id || 'submission')}-seasonal-specifications`}
+                title="Festival Specifications"
+                value={seasonalForm.specifications}
+                dropdownOptions={seasonalSpecificationOptions}
+                allowOtherFor={SEASONAL_PRODUCT_TYPE_SPECIFICATION_KEYS}
+                onChange={(specifications) => setSeasonalForm({ ...seasonalForm, specifications })}
+              />
+              <StructuredRecordEditor
+                title="Manufacturer Details"
+                value={seasonalForm.manufacturerDetails}
+                onChange={(manufacturerDetails) => setSeasonalForm({ ...seasonalForm, manufacturerDetails })}
+              />
+              <StructuredRecordEditor
+                title="Compliance Details"
+                value={seasonalForm.complianceDetails}
+                onChange={(complianceDetails) => setSeasonalForm({ ...seasonalForm, complianceDetails })}
+              />
+              <CustomAttributesEditor
+                value={seasonalForm.customAttributes}
+                onChange={(customAttributes) => setSeasonalForm({ ...seasonalForm, customAttributes })}
+              />
+            </FormSection>
+          ) : null}
+
+          {submission.isOtherProduct ? (
+            <FormSection
+              title="📦 Other Product Details"
+              description="Review the seller's custom classification and product-specific details. Assign the appropriate catalogue category above."
+            >
+              <InfoCard
+                title="Seller-submitted Other classification"
+                items={[
+                  ['Category', sellerSubmittedCategory || '—'],
+                  ['Subcategory', sellerSubmittedSubcategory || '—'],
+                  ['Product Type', sellerSubmittedProductType || '—'],
+                  ...otherProductDetailsItems,
+                ]}
+              />
+              {Array.isArray(submission.customAttributes) && submission.customAttributes.length > 0 ? (
+                <InfoCard
+                  title="Seller-submitted custom attributes"
+                  items={getCustomAttributeRows(submission.customAttributes).map(({ label, value }) => [label, value])}
+                />
+              ) : null}
+              <FormField label="Country of Origin">
+                <Input
+                  value={otherProductForm.countryOfOrigin}
+                  onChange={(event) =>
+                    setOtherProductForm({ ...otherProductForm, countryOfOrigin: event.target.value })
+                  }
+                />
+              </FormField>
+              <StructuredRecordEditor
+                title="Manufacturer and Compliance Details"
+                value={otherProductForm.manufacturerDetails}
+                onChange={(manufacturerDetails) =>
+                  setOtherProductForm({ ...otherProductForm, manufacturerDetails })
+                }
+              />
+              <CustomAttributesEditor
+                value={otherProductForm.customAttributes}
+                onChange={(customAttributes) => setOtherProductForm({ ...otherProductForm, customAttributes })}
+              />
             </FormSection>
           ) : null}
 
@@ -1856,7 +2798,13 @@ export function SubmissionReviewForm({
             onCommentChange={setComment}
             onApprove={handleApprove}
             onRequestChanges={() => onSubmit(buildPayload('CHANGES_REQUIRED'))}
-            onReject={() => onSubmit(buildPayload('REJECT'))}
+            onReject={() => {
+              if (!comment.trim()) {
+                toast.error('Rejection reason is mandatory when rejecting a product');
+                return;
+              }
+              onSubmit(buildPayload('REJECT'));
+            }}
             isPending={isPending}
             approveDisabled={
               approvalMode === 'create' ? !canApproveCreate : !canApproveMap

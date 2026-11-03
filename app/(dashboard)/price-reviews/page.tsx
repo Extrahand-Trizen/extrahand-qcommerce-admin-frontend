@@ -77,10 +77,12 @@ interface SellerListing {
   unit?: string | null;
   sellingPricePaise: number;
   customDescription?: string | null;
+  customName?: string | null;
   customNotes?: string | null;
   customAttributes?: Array<{ attributeId?: string; label?: string; value: any }> | null;
   customProductInformation?: Record<string, any> | null;
 
+  pendingName?: string | null;
   pendingSellingPricePaise?: number | null;
   pendingUnit?: string | null;
   pendingDescription?: string | null;
@@ -349,6 +351,20 @@ export default function PriceReviewsPage() {
           status: liveVal ? 'Modified' : 'Added',
         });
       }
+    }
+
+    if (
+      item.pendingName &&
+      item.pendingName.trim() !== (item.customName || item.masterProductId?.name || '').trim()
+    ) {
+      const liveName = (item.customName || item.masterProductId?.name || '').trim();
+      diffs.push({
+        key: 'name',
+        label: 'Product Name',
+        liveVal: liveName || '—',
+        pendingVal: item.pendingName.trim(),
+        status: 'Modified',
+      });
     }
 
     if (

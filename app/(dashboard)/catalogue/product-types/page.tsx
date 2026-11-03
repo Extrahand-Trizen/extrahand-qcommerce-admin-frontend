@@ -70,26 +70,12 @@ export default function ProductTypesPage() {
       fields={[
         {
           section: 'Placement',
-          name: 'vertical',
-          label: 'Store Vertical',
-          type: 'select',
-          defaultValue: 'KIRANA',
-          placeholder: 'Select store vertical',
-          hint: 'Controls visibility. Defaults to Kirana or inherits from parent subcategory.',
-          options: [
-            { value: 'KIRANA', label: '🛒 Kirana / Grocery' },
-            { value: 'MEDICAL', label: '💊 Pharmacy / Medical' },
-            { value: 'ALL', label: '🌐 All Stores (Both)' },
-          ],
-        },
-        {
-          section: 'Placement',
           name: 'categoryId',
           label: 'Category',
           type: 'category',
           required: true,
           placeholder: 'Select a category',
-          hint: 'Top-level catalogue category.',
+          hint: 'Top-level category. Store vertical is inherited from this category.',
         },
         {
           section: 'Placement',
@@ -158,6 +144,7 @@ export default function ProductTypesPage() {
               <SelectItem value="all">All Verticals</SelectItem>
               <SelectItem value="KIRANA">🛒 Kirana Only</SelectItem>
               <SelectItem value="MEDICAL">💊 Medical Only</SelectItem>
+              <SelectItem value="SEASONAL">🎉 Seasonal Only</SelectItem>
               <SelectItem value="ALL">🌐 All Stores (Both)</SelectItem>
             </SelectContent>
           </Select>

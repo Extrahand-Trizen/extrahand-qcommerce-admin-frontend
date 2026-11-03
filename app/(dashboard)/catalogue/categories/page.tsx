@@ -18,7 +18,7 @@ export default function CategoriesPage() {
   return (
     <EntityListPage
       title="Categories"
-      description="Top-level catalogue groups partitioned by store vertical (Kirana vs Medical)."
+      description="Top-level catalogue groups partitioned by store vertical."
       endpoint={endpoint}
       queryKey={`categories-${verticalFilter}`}
       searchPlaceholder="Search categories…"
@@ -31,12 +31,14 @@ export default function CategoriesPage() {
             <SelectItem value="all">All Verticals</SelectItem>
             <SelectItem value="KIRANA">🛒 Kirana Only</SelectItem>
             <SelectItem value="MEDICAL">💊 Medical Only</SelectItem>
+            <SelectItem value="SEASONAL">🎉 Seasonal Only</SelectItem>
             <SelectItem value="ALL">🌐 All Stores (Both)</SelectItem>
           </SelectContent>
         </Select>
       }
       columns={[
         { key: 'name', label: 'Category', render: (r) => <CatalogueImageNameCell row={r} /> },
+        { key: 'festival', label: 'Festival / Occasion' },
         { key: 'vertical', label: 'Store Vertical', render: (r) => <VerticalCell row={r} /> },
         { key: 'displayOrder', label: 'Order', render: (r) => <OrderCell value={r.displayOrder} /> },
         { key: 'status', label: 'Status', render: (r) => <StatusBadge status={String(r.status)} /> },
@@ -54,8 +56,16 @@ export default function CategoriesPage() {
           options: [
             { value: 'KIRANA', label: '🛒 Kirana / Grocery Store Only' },
             { value: 'MEDICAL', label: '💊 Pharmacy / Medical Store Only' },
+            { value: 'SEASONAL', label: '🎉 Seasonal / Festival Products' },
             { value: 'ALL', label: '🌐 All Stores (Both)' },
           ],
+        },
+        {
+          section: 'Placement & Vertical',
+          name: 'festival',
+          label: 'Festival / Occasion',
+          placeholder: 'e.g. Diwali, Holi, Christmas',
+          hint: 'Required for Seasonal categories. Sellers use this value to group seasonal categories.',
         },
         {
           section: 'Basic details',

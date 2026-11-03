@@ -52,26 +52,12 @@ export default function SubcategoriesPage() {
       fields={[
         {
           section: 'Placement',
-          name: 'vertical',
-          label: 'Store Vertical',
-          type: 'select',
-          defaultValue: 'KIRANA',
-          placeholder: 'Select store vertical',
-          hint: 'Controls visibility. Defaults to Kirana or inherits from parent category.',
-          options: [
-            { value: 'KIRANA', label: '🛒 Kirana / Grocery' },
-            { value: 'MEDICAL', label: '💊 Pharmacy / Medical' },
-            { value: 'ALL', label: '🌐 All Stores (Both)' },
-          ],
-        },
-        {
-          section: 'Placement',
           name: 'categoryId',
           label: 'Parent category',
           type: 'category',
           required: true,
           placeholder: 'Select a category',
-          hint: 'Which top-level category this belongs under.',
+          hint: 'The subcategory inherits its store vertical from this parent category.',
         },
         {
           section: 'Basic details',
@@ -139,6 +125,7 @@ export default function SubcategoriesPage() {
               <SelectItem value="all">All Verticals</SelectItem>
               <SelectItem value="KIRANA">🛒 Kirana Only</SelectItem>
               <SelectItem value="MEDICAL">💊 Medical Only</SelectItem>
+              <SelectItem value="SEASONAL">🎉 Seasonal Only</SelectItem>
               <SelectItem value="ALL">🌐 All Stores (Both)</SelectItem>
             </SelectContent>
           </Select>
