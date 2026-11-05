@@ -49,6 +49,16 @@ const sellersShopsNav: NavItem[] = [
   },
 ];
 
+const catalogueAdminSellersNav: NavItem[] = [
+  {
+    name: 'Sellers & Shops',
+    icon: Store,
+    children: [
+      { name: 'Shops & Stores', href: '/sellers/stores' },
+    ],
+  },
+];
+
 // 3. Product Approvals
 const productApprovalsNav: NavItem[] = [
   {
@@ -134,7 +144,7 @@ export function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => voi
         ...verificationNav,
       ]
     : isCatalogueAdmin
-      ? [...dashboardNav, ...productApprovalsNav, ...masterCatalogueNav]
+      ? [...dashboardNav, ...catalogueAdminSellersNav, ...productApprovalsNav, ...masterCatalogueNav]
       : allSections;
 
   return (

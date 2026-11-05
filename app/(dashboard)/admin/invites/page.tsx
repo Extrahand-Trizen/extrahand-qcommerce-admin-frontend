@@ -83,11 +83,18 @@ export default function AdminInvitesPage() {
   // Create Invite Mutation
   const createMutation = useMutation({
     mutationFn: createInvite,
-    onSuccess: () => {
+    onSuccess: (resData) => {
       queryClient.invalidateQueries({ queryKey: ['admin-invites'] });
       setIsCreateOpen(false);
       setInviteForm({ name: '', email: '', role: 'CATALOGUE_ADMIN' });
-      toast.success('Invitation sent successfully');
+      if (resData?.inviteLink && typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(resData.inviteLink).catch(() => {});
+        toast.success('Invitation created successfully!', {
+          description: 'Invite link copied to clipboard.',
+        });
+      } else {
+        toast.success('Invitation created successfully');
+      }
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to send invitation');
@@ -98,8 +105,16 @@ export default function AdminInvitesPage() {
   const resendMutation = useMutation({
     mutationFn: (inviteId: string) => resendInvite(inviteId),
     onMutate: (inviteId) => setActiveResendId(inviteId),
-    onSuccess: () => {
-      toast.success('Invitation email resent successfully');
+    onSuccess: (resData) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-invites'] });
+      if (resData?.inviteLink && typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(resData.inviteLink).catch(() => {});
+        toast.success('Invitation resent successfully!', {
+          description: 'New invite link copied to clipboard.',
+        });
+      } else {
+        toast.success('Invitation resent successfully');
+      }
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to resend invitation');

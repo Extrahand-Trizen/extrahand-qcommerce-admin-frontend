@@ -92,6 +92,7 @@ export function ProductDetailView({ productId }: ProductDetailViewProps) {
       return res.data!;
     },
     enabled: !!productId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const productTypeId = data ? refId(data.product.productTypeId) : '';
@@ -103,6 +104,7 @@ export function ProductDetailView({ productId }: ProductDetailViewProps) {
         ? (await api<AttrMapping[]>(endpoints.productTypeAttributes(productTypeId))).data || []
         : [],
     enabled: !!productTypeId,
+    staleTime: 10 * 60 * 1000,
   });
 
   const attributeRows = useMemo(() => {

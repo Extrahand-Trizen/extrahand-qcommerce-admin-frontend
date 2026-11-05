@@ -17,9 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { StoreLocationMapDialog } from '@/components/sellers/store-location-map-dialog';
+import { AdminAddProductDialog } from '@/components/sellers/admin-add-product-dialog';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import {
   ArrowLeft,
+  Plus,
   MapPin,
   FileText,
   Clock,
@@ -152,6 +155,7 @@ export default function SellerStoreDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
+  const { isCatalogueAdmin } = useAuth();
 
   // Active Tab synced with URL
   const activeTab = searchParams.get('tab') || 'overview';
@@ -169,6 +173,7 @@ export default function SellerStoreDetailPage() {
 
   // State for Products Tab
   const [productSearch, setProductSearch] = useState('');
+  const [addProductOpen, setAddProductOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [deleteListingProduct, setDeleteListingProduct] = useState<StoreProduct | null>(null);
 
@@ -538,16 +543,18 @@ export default function SellerStoreDetailPage() {
                 KYC &amp; Documents
               </Link>
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => setDeleteModalOpen(true)}
-              className="gap-1.5 bg-red-600 hover:bg-red-700 text-white font-medium"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Store
-            </Button>
+            {!isCatalogueAdmin && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteModalOpen(true)}
+                className="gap-1.5 bg-red-600 hover:bg-red-700 text-white font-medium"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Store
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -604,10 +611,12 @@ export default function SellerStoreDetailPage() {
               </span>
             ) : null}
           </TabsTrigger>
-          <TabsTrigger value="payouts" className="gap-1.5 text-xs font-medium data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950 data-[state=active]:font-semibold data-[state=active]:shadow-xs">
-            <CreditCard className="h-3.5 w-3.5" />
-            Payouts &amp; Finance
-          </TabsTrigger>
+          {!isCatalogueAdmin && (
+            <TabsTrigger value="payouts" className="gap-1.5 text-xs font-medium data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950 data-[state=active]:font-semibold data-[state=active]:shadow-xs">
+              <CreditCard className="h-3.5 w-3.5" />
+              Payouts &amp; Finance
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* =================================================================== */}
@@ -959,12 +968,23 @@ export default function SellerStoreDetailPage() {
                       : `${totalStoreProducts} product${totalStoreProducts === 1 ? '' : 's'} listed in this store`}
                   </p>
                 </div>
-                <SearchInput
-                  value={productSearch}
-                  onChange={setProductSearch}
-                  placeholder="Search products in this store..."
-                  className="sm:max-w-xs"
-                />
+                <div className="flex items-center gap-2">
+                  <SearchInput
+                    value={productSearch}
+                    onChange={setProductSearch}
+                    placeholder="Search products in this store..."
+                    className="sm:max-w-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setAddProductOpen(true)}
+                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold gap-1.5 shrink-0 shadow-2xs"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Product
+                  </Button>
+                </div>
               </div>
             }
           >
@@ -1027,8 +1047,8 @@ export default function SellerStoreDetailPage() {
                         <div>
                           <p className="font-bold text-slate-900">₹{product.sellingPriceRupees.toFixed(2)}</p>
                           {product.compareAtPriceRupees ? (
-                            <p className="text-xs text-muted-foreground line-through">
-                              ₹{product.compareAtPriceRupees.toFixed(2)}
+                            <p className="text-[11px] text-slate-500 font-medium">
+                              MRP: ₹{product.compareAtPriceRupees.toFixed(2)}
                             </p>
                           ) : null}
                         </div>
@@ -2252,6 +2272,18 @@ export default function SellerStoreDetailPage() {
           </div>
         </div>
       )}
+      {/* Admin Add Product to Store Dialog */}
+      <AdminAddProductDialog
+        open={addProductOpen}
+        onClose={() => setAddProductOpen(false)}
+        preselectedStore={{
+          sellerId: String(id || ''),
+          shopName: String(onboarding.shopName || onboarding.fullName || 'Store'),
+          shopType: onboarding.shopCategory ? String(onboarding.shopCategory) : onboarding.shopType ? String(onboarding.shopType) : undefined,
+          mobileNumber: (seller as any)?.mobileNumber ? String((seller as any).mobileNumber) : undefined,
+          ownerName: onboarding.ownerName ? String(onboarding.ownerName) : onboarding.fullName ? String(onboarding.fullName) : undefined,
+        }}
+      />
     </div>
   );
 }

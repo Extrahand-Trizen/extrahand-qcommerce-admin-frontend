@@ -542,14 +542,14 @@ export default function ProductsPage() {
                           <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
                             {thumb ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={thumb} alt="" className="h-full w-full object-cover" />
+                              <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                             ) : (
                               <Package className="h-5 w-5 text-muted-foreground" />
                             )}
                           </div>
                           <div className="space-y-0.5">
                             <p className="font-semibold text-slate-900 text-sm hover:text-amber-800">
-                              <Link href={`/products/${String(p._id)}`}>{String(p.name)}</Link>
+                              <Link href={`/products/${String(p._id)}`} prefetch={false}>{String(p.name)}</Link>
                             </p>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {p.vertical === 'MEDICAL' || (p as any).isMedicalProduct ? (

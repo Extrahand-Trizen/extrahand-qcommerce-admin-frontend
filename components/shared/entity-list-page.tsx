@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, endpoints } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -89,7 +90,12 @@ export function EntityListPage({
   createLabel,
 }: EntityListPageProps) {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
   const [deleting, setDeleting] = useState<Record<string, unknown> | null>(null);
@@ -123,10 +129,10 @@ export function EntityListPage({
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: [queryKey, search, page, endpoint],
+    queryKey: [queryKey, debouncedSearch, page, endpoint],
     queryFn: async () => {
       const res = await api<{ items: Record<string, unknown>[]; total: number; totalPages: number }>(
-        buildUrl(endpoint, page, search),
+        buildUrl(endpoint, page, debouncedSearch),
       );
       if (!res.data) throw new Error('No data returned from server');
       return res.data;

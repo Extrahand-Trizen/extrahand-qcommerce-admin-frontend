@@ -36,6 +36,7 @@ import {
   type AttrMapping,
 } from '@/components/products/product-type-attribute-fields';
 import { toast } from 'sonner';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 type NamedRef = { _id: string; name: string };
 
@@ -305,10 +306,11 @@ function StructuredRecordEditor({
   const [invalidJsonFields, setInvalidJsonFields] = useState<Record<string, boolean>>({});
   const [customSelections, setCustomSelections] = useState<Record<string, boolean>>({});
 
+  const valueKeys = Object.keys(value).join(',');
   useEffect(() => {
     setDrafts({});
     setInvalidJsonFields({});
-  }, [value]);
+  }, [title, valueKeys]);
 
   const entries = Object.entries(value);
   if (entries.length === 0) return null;
@@ -502,6 +504,7 @@ export function SubmissionReviewForm({
   const [approvalMode, setApprovalMode] = useState<'create' | 'map'>('create');
   const [masterProductId, setMasterProductId] = useState('');
   const [masterSearch, setMasterSearch] = useState('');
+  const debouncedMasterSearch = useDebounce(masterSearch, 300);
 
   const sellerSubmittedCategory =
     getCleanText(submission.customCategoryName) ||
@@ -650,6 +653,8 @@ export function SubmissionReviewForm({
   const { data: brands = [] } = useQuery({
     queryKey: ['product-brands'],
     queryFn: async () => (await api<string[]>(endpoints.productBrands)).data || [],
+    enabled: !readOnly,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery({
@@ -659,6 +664,7 @@ export function SubmissionReviewForm({
         `${endpoints.categories}?status=ACTIVE&limit=100`
       )).data?.items || [],
     enabled: !readOnly,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: subcategories, isLoading: subcategoriesLoading } = useQuery({
@@ -672,6 +678,7 @@ export function SubmissionReviewForm({
           ).data?.items || []
         : [],
     enabled: !!categoryId && !readOnly,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: productTypes, isLoading: productTypesLoading } = useQuery({
@@ -685,6 +692,7 @@ export function SubmissionReviewForm({
           ).data?.items || []
         : [],
     enabled: !!subcategoryId && !readOnly,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: typeAttributes } = useQuery({
@@ -694,13 +702,14 @@ export function SubmissionReviewForm({
         ? (await api<AttrMapping[]>(endpoints.productTypeAttributes(productTypeId))).data || []
         : [],
     enabled: !!productTypeId && !readOnly,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: masterProducts } = useQuery({
-    queryKey: ['master-products-search', masterSearch],
+    queryKey: ['master-products-search', debouncedMasterSearch],
     queryFn: async () => {
       const params = new URLSearchParams({ limit: '20', status: 'ACTIVE' });
-      if (masterSearch.trim()) params.set('search', masterSearch.trim());
+      if (debouncedMasterSearch.trim()) params.set('search', debouncedMasterSearch.trim());
       const res = await api<{ items: Array<{ _id: string; name: string; brand?: string; sku?: string }> }>(
         `${endpoints.masterProducts}?${params}`
       );
@@ -1075,7 +1084,7 @@ export function SubmissionReviewForm({
 
   // Auto-match category when categories query finishes if not manually selected by admin
   useEffect(() => {
-    if (!categories || categories.length === 0 || userChangedCategory) return;
+    if (readOnly || !categories || categories.length === 0 || userChangedCategory) return;
 
     // Check if seller requested a specific category (e.g. "Prescription Medicines")
     const requestedCat = submission.isOtherProduct
@@ -1127,7 +1136,7 @@ export function SubmissionReviewForm({
 
   // Auto-match subcategory when subcategories query finishes if not already selected
   useEffect(() => {
-    if (!subcategories || subcategories.length === 0) return;
+    if (readOnly || !subcategories || subcategories.length === 0) return;
 
     if (subcategoryId && subcategories.some((s) => s._id === subcategoryId)) {
       return;
@@ -1164,7 +1173,7 @@ export function SubmissionReviewForm({
 
   // Auto-match product type when productTypes query finishes if not already selected
   useEffect(() => {
-    if (!productTypes || productTypes.length === 0) return;
+    if (readOnly || !productTypes || productTypes.length === 0) return;
 
     if (productTypeId && productTypes.some((pt) => pt._id === productTypeId)) {
       return;
@@ -1540,6 +1549,8 @@ export function SubmissionReviewForm({
                     <img
                       src={url}
                       alt={`Product Photo ${idx + 1}`}
+                      loading="lazy"
+                      decoding="async"
                       className="h-36 w-full rounded-md border object-cover"
                     />
                   </CardContent>
@@ -1670,6 +1681,8 @@ export function SubmissionReviewForm({
                   <img
                     src={url}
                     alt={`Product Photo ${idx + 1}`}
+                    loading="lazy"
+                    decoding="async"
                     className="h-36 w-full rounded-md border object-cover"
                   />
                 </CardContent>

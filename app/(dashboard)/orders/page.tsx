@@ -21,6 +21,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 type OrderRow = {
   id: string;
@@ -44,6 +45,7 @@ type StoreOption = {
 
 export default function GlobalOrdersPage() {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState('all');
   const [shopFilter, setShopFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -52,7 +54,8 @@ export default function GlobalOrdersPage() {
 
   // Fetch approved shops for dropdown filter
   const { data: shops = [] } = useQuery({
-    queryKey: ['order-shops-filter'],
+    queryKey: ['seller-stores-dropdown'],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const res = await api<{ items: StoreOption[] }>(`${endpoints.sellerStores}?limit=100`);
       return res.data?.items || [];
@@ -61,14 +64,14 @@ export default function GlobalOrdersPage() {
 
   // Fetch orders from adminOrders endpoint
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-orders', search, statusFilter, shopFilter, sortOrder, page],
+    queryKey: ['admin-orders', debouncedSearch, statusFilter, shopFilter, sortOrder, page],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
         limit: '20',
         sortOrder,
       });
-      if (search.trim()) params.set('search', search.trim());
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (shopFilter !== 'all') params.set('sellerId', shopFilter);
 

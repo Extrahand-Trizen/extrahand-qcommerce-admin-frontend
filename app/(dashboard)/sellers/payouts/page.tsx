@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import { api, endpoints } from '@/lib/api';
 import {
   IndianRupee,
@@ -79,6 +80,7 @@ export default function SellerPayoutsPage() {
 
   // Filters
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState('all');
   const [shopFilter, setShopFilter] = useState(initialSellerId);
   const [dateRange, setDateRange] = useState('all');
@@ -120,8 +122,8 @@ export default function SellerPayoutsPage() {
       if (shopFilter && shopFilter !== 'all') {
         params.set('sellerId', shopFilter);
       }
-      if (search.trim()) {
-        params.set('search', search.trim());
+      if (debouncedSearch.trim()) {
+        params.set('search', debouncedSearch.trim());
       }
 
       if (dateRange === 'today') {
@@ -155,7 +157,7 @@ export default function SellerPayoutsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, shopFilter, search, dateRange]);
+  }, [page, statusFilter, shopFilter, debouncedSearch, dateRange]);
 
   useEffect(() => {
     fetchPayouts();

@@ -11,6 +11,7 @@ import { TableEmptyRow, TableLoadingRows } from '@/components/shared/table-state
 import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import { PaginationBar } from '@/components/shared/pagination-bar';
 import { format } from 'date-fns';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import { toast } from 'sonner';
 import { getCategoryLabel } from '@/lib/seller-onboarding';
 import {
@@ -45,6 +46,7 @@ interface ApprovalsResponse {
 
 export default function SellerApprovalsPage() {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [cityFilter, setCityFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -53,13 +55,13 @@ export default function SellerApprovalsPage() {
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery<ApprovalsResponse>({
-    queryKey: ['seller-approvals', search, cityFilter, dateFilter, statusFilter, page],
+    queryKey: ['seller-approvals', debouncedSearch, cityFilter, dateFilter, statusFilter, page],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
         limit: '20',
       });
-      if (search.trim()) params.set('search', search.trim());
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
       if (cityFilter && cityFilter !== 'all') params.set('city', cityFilter);
       if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
 

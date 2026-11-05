@@ -18,6 +18,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   Search,
+  Plus,
   ExternalLink,
   Trash2,
   Store,
@@ -38,6 +39,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { AdminAddProductDialog } from '@/components/sellers/admin-add-product-dialog';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export type StoreRow = {
   sellerId: string;
@@ -76,8 +79,10 @@ export default function SellerStoresPage() {
   );
   const [page, setPage] = useState(Number(searchParams.get('page') || '1'));
   const [deleteTarget, setDeleteTarget] = useState<StoreRow | null>(null);
+  const [addProductOpen, setAddProductOpen] = useState(false);
   const [deletionReason, setDeletionReason] = useState('');
   const qc = useQueryClient();
+  const { isCatalogueAdmin } = useAuth();
 
   // Debounce search query to prevent spamming backend
   useEffect(() => {
@@ -286,6 +291,15 @@ export default function SellerStoresPage() {
               <Store className="h-3.5 w-3.5 text-amber-600" />
               <span>{total} {total === 1 ? 'Shop' : 'Shops'} total</span>
             </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setAddProductOpen(true)}
+              className="h-8.5 px-3 gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold shadow-2xs rounded-lg transition-colors text-xs sm:text-sm"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Product to Store</span>
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -535,7 +549,7 @@ export default function SellerStoresPage() {
                             <span className="hidden sm:inline text-slate-500">{store.city}</span>
                           </>
                         )}
-                        {!isStoreDeleted && (
+                        {!isStoreDeleted && !isCatalogueAdmin && (
                           <>
                             <span>&middot;</span>
                             <span className="inline-flex items-center gap-1 font-medium text-slate-700">
@@ -751,7 +765,11 @@ export default function SellerStoresPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Admin Add Product to Store Dialog */}
+      <AdminAddProductDialog
+        open={addProductOpen}
+        onClose={() => setAddProductOpen(false)}
+      />
     </div>
   );
 }
-

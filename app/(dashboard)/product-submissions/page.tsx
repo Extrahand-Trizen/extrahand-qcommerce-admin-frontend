@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge } from '@/components/shared/status-badge';
 import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import { format } from 'date-fns';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import {
   Trash2,
   Layers,
@@ -95,6 +96,7 @@ type ProductSubmissionItem = {
 export default function ProductSubmissionsPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [selectedShop, setSelectedShop] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -106,7 +108,8 @@ export default function ProductSubmissionsPage() {
 
   // Load shops for filter dropdown
   const { data: shops = [] } = useQuery({
-    queryKey: ['filter-shops-submissions'],
+    queryKey: ['seller-stores-dropdown'],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const res = await api<{ items: ShopOption[] }>(`${endpoints.sellerStores}?limit=100`);
       return res.data?.items || [];
@@ -115,7 +118,8 @@ export default function ProductSubmissionsPage() {
 
   // Load categories for filter dropdown
   const { data: categories = [] } = useQuery({
-    queryKey: ['filter-categories-submissions'],
+    queryKey: ['categories-dropdown'],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const res = await api<{ items: CategoryOption[] }>(`${endpoints.categories}?limit=100`);
       return res.data?.items || [];
@@ -143,7 +147,7 @@ export default function ProductSubmissionsPage() {
 
   // Main Submissions Query with pagination & server filters
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ['submissions', activeTab, selectedShop, selectedCategory, dateFilter, search, page, pageSize],
+    queryKey: ['submissions', activeTab, selectedShop, selectedCategory, dateFilter, debouncedSearch, page, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -153,7 +157,7 @@ export default function ProductSubmissionsPage() {
       if (selectedShop !== 'all') params.set('sellerId', selectedShop);
       if (selectedCategory !== 'all') params.set('categoryId', selectedCategory);
       if (dateFilter !== 'all') params.set('dateRange', dateFilter);
-      if (search.trim()) params.set('search', search.trim());
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
 
       const res = await api<{
         items: ProductSubmissionItem[];
@@ -686,6 +690,7 @@ export default function ProductSubmissionsPage() {
                                 alt={String(s.submittedProductName || 'Product')}
                                 fill
                                 sizes="48px"
+                                unoptimized
                                 className="object-cover"
                               />
                             ) : (
@@ -698,6 +703,7 @@ export default function ProductSubmissionsPage() {
                             <div className="flex flex-wrap items-center gap-1.5">
                               <Link
                                 href={`/product-submissions/${String(s._id)}`}
+                                prefetch={false}
                                 className="font-bold text-slate-900 hover:text-amber-800 text-sm truncate transition-colors"
                               >
                                 {String(s.submittedProductName || '—')}

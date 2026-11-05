@@ -41,6 +41,7 @@ export interface AdminInvite {
   expiresAt: string;
   createdAt: string;
   acceptedAt?: string;
+  inviteLink?: string;
 }
 
 export interface ListUsersResponse {
@@ -144,8 +145,8 @@ export async function createInvite(data: {
   return res.data;
 }
 
-export async function resendInvite(inviteId: string): Promise<{ message: string }> {
-  const res = await api<{ message: string }>(`/admin/invites/${inviteId}/resend`, {
+export async function resendInvite(inviteId: string): Promise<{ message: string; inviteLink?: string }> {
+  const res = await api<{ message: string; inviteLink?: string }>(`/admin/invites/${inviteId}/resend`, {
     method: 'POST',
   });
   return res.data || { message: 'Invitation resent' };
